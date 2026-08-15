@@ -18,6 +18,13 @@ All notable changes to this project are documented here.
 
 - No unreleased changes listed.
 
+### Checklist (before snapshot)
+
+- [ ] Add a concise bullet under Unreleased (`Added` / `Changed` / `Fixed`) for every behavioral or config update.
+- [ ] Keep each bullet actionable and short enough to stay understandable without opening the PR diff.
+- [ ] Run relevant checks/tests when behavior/code is changed.
+- [ ] On release snapshot, move Unreleased items into a dated section and record commit hashes under `Commits`.
+
 ## [2026-08-15]
 
 ### Added

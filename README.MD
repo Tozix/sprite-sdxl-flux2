@@ -3174,3 +3174,10 @@ Suggested format:
 - `Fixed`: bug fixes, stricter checks, test or validation adjustments.
 
 After release (if/when you tag or snapshot), move unreleased bullets into a dated section and add commit references under `Commits`.
+
+Quick release checklist:
+
+- [ ] Add/refresh Unreleased bullets in all relevant sections before merge.
+- [ ] Verify the changed behavior/config is documented in `CHANGELOG.md` and `README.MD` if process-related.
+- [ ] Re-run the smallest relevant checks for touched code paths.
+- [ ] On snapshot/tag, move unreleased bullets and add commit hashes under `Commits`.
