@@ -4,7 +4,19 @@ All notable changes to this project are documented here.
 
 ## [Unreleased]
 
-- Changelog introduced to track future modifications.
+- Changelog section is maintained for every behavior/config change.
+
+### Added
+
+- Changelog workflow is now tracked for each change.
+
+### Changed
+
+- No unreleased changes listed.
+
+### Fixed
+
+- No unreleased changes listed.
 
 ## [2026-08-15]
 

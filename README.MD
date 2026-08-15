@@ -3154,3 +3154,23 @@ and other MMORPG content
 without treating every asset class as if it were a character sprite.
 
 **Capability discovery, reproducibility, consistency, deterministic post-processing, explicit metadata and asset-class-specific generation rules are mandatory parts of the pipeline.**
+
+---
+
+# 94. Changelog maintenance
+
+Before merging any functional or process change:
+
+- add an entry to `CHANGELOG.md` under `[Unreleased]` in the relevant section
+  (`Added`, `Changed`, `Fixed`); and
+- keep those records compact and actionable so every non-trivial change is traceable later.
+
+Suggested format:
+
+- `Added`: new scripts, files, or major features.
+
+- `Changed`: behavior tuning, prompt constants, generation defaults.
+
+- `Fixed`: bug fixes, stricter checks, test or validation adjustments.
+
+After release (if/when you tag or snapshot), move unreleased bullets into a dated section and add commit references under `Commits`.
