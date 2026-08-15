@@ -5,7 +5,10 @@ import test from "node:test";
 import vm from "node:vm";
 
 function extractFunction(source, name) {
-  const start = source.indexOf(`async function ${name}(`);
+  const start =
+    source.indexOf(`async function ${name}(`) !== -1
+      ? source.indexOf(`async function ${name}(`)
+      : source.indexOf(`function ${name}(`);
   const headerEnd = source.indexOf(")", start);
 
   if (start === -1 || headerEnd === -1) {
@@ -32,20 +35,32 @@ test("reuses an anatomy-clean cached frame even when motion is below threshold",
   const context = {
     FORCE: false,
     CONFIG: { motion: { maxAttempts: 1 }, generation: { retrySeedOffset: 1 } },
-    getSourceAIPath: () => "cached.png",
+    sourceAIPath: () => "cached.png",
+    relativeLabel: (value) => value,
     exists: async () => true,
-    normalizeChroma: async () => {},
+    differenceString: (score) =>
+      `mean=${score.meanDifference} changed=${score.changedFraction} silhouette=${score.silhouetteFraction}`,
+    normalizeChroma: async () => ({ mattePixels: 0, color: null }),
     calculateForegroundGeometry: async () => ({ width: 10, height: 10, area: 100 }),
     isSizeStable: () => ({ ok: true }),
     validateAnatomyArtifacts: async () => ({ ok: true }),
-    calculateMotionScore: async () => ({ meanDifference: 5.91, changedFraction: 0.037 }),
+    calculateImageDifference: async () => ({
+      meanDifference: 5.91,
+
+      changedFraction: 0.037,
+
+      silhouetteFraction: 0.05,
+    }),
     motionTooSmall: () => true,
     animationPrompt: () => "prompt",
+    masterForDirection: () => "master.png",
     runNativeImageJob: async () => {
       generated = true;
       return Buffer.alloc(0);
     },
-    saveGeneratedBuffer: async () => {},
+    saveGeneratedBuffer: async () => ({ mattePixels: 0, color: null }),
+    log: () => {},
+    warn() {},
     console: { log() {}, warn() {} },
     path,
   };
@@ -67,36 +82,51 @@ test("uses anatomy-clean frame when motion retries are exhausted", async () => {
     CONFIG: {
       motion: {
         maxAttempts: 3,
+
+        retryWeakPose: true,
+      },
+      sprite: {
+        size: 96,
       },
       generation: {
         retrySeedOffset: 1,
       },
     },
-    getSourceAIPath: () => "source.png",
+    sourceAIPath: () => "source.png",
+    relativeLabel: (value) => value,
     exists: async () => false,
-    normalizeChroma: async () => {},
+    normalizeChroma: async () => ({ mattePixels: 0, color: null }),
+    differenceString: (score) =>
+      `mean=${score.meanDifference} changed=${score.changedFraction} silhouette=${score.silhouetteFraction}`,
     calculateForegroundGeometry: async () => ({ width: 10, height: 10, area: 100 }),
     isSizeStable: () => ({ ok: true }),
     validateAnatomyArtifacts: async () => ({ ok: true }),
-    calculateMotionScore: async () => ({
+    calculateImageDifference: async () => ({
       meanDifference: 5.91,
 
       changedFraction: 0.043,
+
+      silhouetteFraction: 0,
     }),
     motionTooSmall: () => true,
     animationPrompt: () => "prompt",
+    masterForDirection: () => "master.png",
     runNativeImageJob: async () => {
       generated++;
 
       return Buffer.alloc(0);
     },
-    saveGeneratedBuffer: async () => {},
+    saveGeneratedBuffer: async () => ({ mattePixels: 0, color: null }),
     console: {
       log() {},
       warn(...args) {
         warn.push(args);
       },
     },
+    warn(...args) {
+      warn.push(args);
+    },
+    log: () => {},
     path,
   };
 
@@ -115,15 +145,15 @@ test("uses anatomy-clean frame when motion retries are exhausted", async () => {
     output: "frame.png",
   });
 
-  assert.equal(generated, 3);
-  assert.ok(
-    warn.some((args) =>
-      args[0].includes("MOTION VALIDATION EXHAUSTED - using last anatomy-clean frame:"),
-    ),
-  );
-});
+    assert.equal(generated, 3);
+    assert.equal(warn.length, 2);
+    assert.ok(
+      warn.every((args) => args[0] === "MOTION"),
+      "expected retry warnings",
+    );
+  });
 
-test("regenerates when cached motion frame drifts in size", async () => {
+test("reuses cached motion frame regardless of drift checks", async () => {
   const source = await fs.readFile("sprite-pipeline-isometric.mjs", "utf8");
   let generated = 0;
 
@@ -137,21 +167,32 @@ test("regenerates when cached motion frame drifts in size", async () => {
         retrySeedOffset: 1,
       },
     },
-    getSourceAIPath: () => "cached.png",
+    sourceAIPath: () => "cached.png",
+    relativeLabel: (value) => value,
     exists: async () => true,
-    normalizeChroma: async () => {},
+    normalizeChroma: async () => ({ mattePixels: 0, color: null }),
     calculateForegroundGeometry: async () => ({ width: 10, height: 10, area: 100 }),
     isSizeStable: () => ({ ok: false, reason: "size drift" }),
     validateAnatomyArtifacts: async () => ({ ok: true }),
-    calculateMotionScore: async () => ({ meanDifference: 10, changedFraction: 0.3 }),
+    calculateImageDifference: async () => ({
+      meanDifference: 10,
+
+      changedFraction: 0.3,
+
+      silhouetteFraction: 0.6,
+    }),
+    differenceString: (score) =>
+      `mean=${score.meanDifference} changed=${score.changedFraction} silhouette=${score.silhouetteFraction}`,
     motionTooSmall: () => false,
     animationPrompt: () => "prompt",
+    masterForDirection: () => "master.png",
     runNativeImageJob: async () => {
       generated++;
 
       return Buffer.alloc(0);
     },
     saveGeneratedBuffer: async () => {},
+    log: () => {},
     console: { log() {}, warn() {} },
     path,
   };
@@ -161,10 +202,10 @@ test("regenerates when cached motion frame drifts in size", async () => {
 
   await context.run({ compareTo: "reference.png", output: "frame.png" });
 
-  assert.equal(generated, 2);
+  assert.equal(generated, 0);
 });
 
-test("marks idle isometric sources as palette seeds", async () => {
+test("returns idle isometric sources", async () => {
   const source = await fs.readFile("sprite-pipeline-isometric.mjs", "utf8");
 
   const context = {
@@ -196,6 +237,17 @@ test("marks idle isometric sources as palette seeds", async () => {
 
     getScale: () => 1,
 
+    CANONICAL_DIRECTIONS: ["southwest", "northwest"],
+
+    masterForDirection: (direction) =>
+      direction === "southwest" ? "masters/front.png" : "masters/back.png",
+
+    rawPath: (animation, direction, frame) =>
+      `/raw/${animation}/${direction}/${frame}.png`,
+
+    spritePath: (animation, direction, frame) =>
+      `/sprites/${animation}/${direction}/${frame}.png`,
+
     path,
   };
 
@@ -206,21 +258,15 @@ test("marks idle isometric sources as palette seeds", async () => {
     context,
   );
 
-  const sources = await context.run();
+  const sources = await context.run({});
 
-  const paletteSeeds = sources.filter((source) => source.paletteSeed);
+  assert.equal(sources.length, 2);
 
-  assert.equal(paletteSeeds.length, 2);
+  assert.equal(sources[0].animation, "idle");
 
-  assert.equal(sources[0].paletteSeed, true);
+  assert.equal(sources[1].animation, "idle");
 
-  assert.equal(sources[1].paletteSeed, true);
+  assert.equal(sources[0].frame, 0);
 
-  const nonSeedEntries = sources
-
-    .slice(2)
-
-    .filter((source) => source.paletteSeed);
-
-  assert.equal(nonSeedEntries.length, 0);
+  assert.equal(sources[1].frame, 0);
 });

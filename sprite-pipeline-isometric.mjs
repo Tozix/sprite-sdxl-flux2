@@ -2,12 +2,18 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 
+/*
+|--------------------------------------------------------------------------
+| ENV
+|--------------------------------------------------------------------------
+*/
+
 async function loadEnv(file = ".env") {
   try {
     const text = await fs.readFile(file, "utf8");
 
-    for (const raw of text.split(/\r?\n/)) {
-      const line = raw.trim();
+    for (const rawLine of text.split(/\r?\n/)) {
+      const line = rawLine.trim();
 
       if (!line || line.startsWith("#")) {
         continue;
@@ -15,7 +21,7 @@ async function loadEnv(file = ".env") {
 
       const index = line.indexOf("=");
 
-      if (index < 1) {
+      if (index <= 0) {
         continue;
       }
 
@@ -29,10 +35,10 @@ async function loadEnv(file = ".env") {
       ) {
         value = value.slice(1, -1);
       } else {
-        const comment = value.indexOf(" #");
+        const commentIndex = value.indexOf(" #");
 
-        if (comment >= 0) {
-          value = value.slice(0, comment).trim();
+        if (commentIndex >= 0) {
+          value = value.slice(0, commentIndex).trim();
         }
       }
 
@@ -47,11 +53,11 @@ async function loadEnv(file = ".env") {
   }
 }
 
-const envString = (name, fallback) => {
+function envString(name, fallback) {
   const value = process.env[name];
 
   return value === undefined || value === "" ? fallback : value;
-};
+}
 
 function envInt(name, fallback, min = -Infinity, max = Infinity) {
   const raw = process.env[name];
@@ -107,30 +113,47 @@ function envBool(name, fallback) {
 
 await loadEnv(envString("IRON_ARCANA_ENV_FILE", ".env"));
 
+/*
+|--------------------------------------------------------------------------
+| CONFIG
+|--------------------------------------------------------------------------
+*/
+
 const CONFIG = {
   server: envString("IRON_ARCANA_AI_SERVER", "http://192.168.0.14:7861"),
 
   outputDir: envString("IRON_ARCANA_OUTPUT_DIR", "./output/rat-isometric"),
 
-  generationSize: envInt("IRON_ARCANA_GENERATION_SIZE", 384, 128, 2048),
+  generation: {
+    size: envInt("IRON_ARCANA_GENERATION_SIZE", 384, 128, 2048),
 
-  steps: envInt("IRON_ARCANA_GENERATION_STEPS", 4, 1, 100),
+    steps: envInt("IRON_ARCANA_GENERATION_STEPS", 4, 1, 100),
 
-  sampler: envString("IRON_ARCANA_SAMPLER", "euler"),
+    sampler: envString("IRON_ARCANA_SAMPLER", "euler"),
 
-  cfg: envFloat("IRON_ARCANA_CFG", 1.0, 0, 30),
+    cfg: envFloat("IRON_ARCANA_CFG", 1.0, 0, 30),
 
-  spriteSize: envInt("IRON_ARCANA_SPRITE_SIZE", 96, 16, 512),
+    retrySeedOffset: envInt(
+      "IRON_ARCANA_RETRY_SEED_OFFSET",
+      7919,
+      1,
+      1_000_000,
+    ),
+  },
 
-  paletteSize: envInt("IRON_ARCANA_PALETTE_SIZE", 28, 8, 256),
+  sprite: {
+    size: envInt("IRON_ARCANA_SPRITE_SIZE", 96, 16, 512),
 
-  previewScale: envInt("IRON_ARCANA_PREVIEW_SCALE", 3, 1, 12),
+    paletteSize: envInt("IRON_ARCANA_PALETTE_SIZE", 28, 8, 256),
 
-  alphaThreshold: envInt("IRON_ARCANA_ALPHA_THRESHOLD", 90, 0, 255),
+    previewScale: envInt("IRON_ARCANA_PREVIEW_SCALE", 3, 1, 12),
 
-  chromaHex: envString("IRON_ARCANA_CHROMA_COLOR", "#00FF00"),
+    alphaThreshold: envInt("IRON_ARCANA_ALPHA_THRESHOLD", 90, 0, 255),
+  },
 
   chroma: {
+    hex: envString("IRON_ARCANA_CHROMA_COLOR", "#00FF00"),
+
     hueToleranceDegrees: envFloat(
       "IRON_ARCANA_CHROMA_HUE_TOLERANCE",
       48,
@@ -190,18 +213,48 @@ const CONFIG = {
     ),
   },
 
-  walkFrames: 4,
-  attackFrames: 6,
+  master: {
+    maxAttempts: envInt("IRON_ARCANA_MASTER_MAX_ATTEMPTS", 3, 1, 8),
 
-  hitVariants: envInt("IRON_ARCANA_HIT_VARIANTS", 2, 1, 4),
+    referenceAttempts: envInt(
+      "IRON_ARCANA_MASTER_BACK_REFERENCE_ATTEMPTS",
+      2,
+      0,
+      8,
+    ),
 
-  hitFrames: envInt("IRON_ARCANA_HIT_FRAMES", 3, 2, 5),
+    perspectiveMinMean: envFloat(
+      "IRON_ARCANA_MASTER_PERSPECTIVE_MIN_MEAN",
+      9.0,
+      0,
+      255,
+    ),
 
-  deathFrames: envInt("IRON_ARCANA_DEATH_FRAMES", 5, 3, 8),
+    perspectiveMinChanged: envFloat(
+      "IRON_ARCANA_MASTER_PERSPECTIVE_MIN_CHANGED",
+      0.12,
+      0,
+      1,
+    ),
 
-  corpseVariants: envInt("IRON_ARCANA_CORPSE_VARIANTS", 3, 1, 6),
+    perspectiveMinSilhouette: envFloat(
+      "IRON_ARCANA_MASTER_PERSPECTIVE_MIN_SILHOUETTE",
+      0.035,
+      0,
+      1,
+    ),
 
-  masterMaxAttempts: envInt("IRON_ARCANA_MASTER_MAX_ATTEMPTS", 2, 1, 5),
+    earQAEnabled: envBool("IRON_ARCANA_MASTER_EAR_QA", true),
+
+    maxEarComponents: envInt("IRON_ARCANA_MASTER_MAX_EAR_COMPONENTS", 2, 1, 6),
+
+    minEarComponentPixels: envInt(
+      "IRON_ARCANA_MASTER_MIN_EAR_COMPONENT_PIXELS",
+      45,
+      5,
+      10_000,
+    ),
+  },
 
   motion: {
     analysisSize: envInt("IRON_ARCANA_MOTION_ANALYSIS_SIZE", 128, 32, 512),
@@ -213,44 +266,55 @@ const CONFIG = {
       255,
     ),
 
-    minMeanDifference: envFloat(
-      "IRON_ARCANA_MOTION_MIN_MEAN_DIFFERENCE",
-      4.5,
-      0,
-      255,
-    ),
+    minMean: envFloat("IRON_ARCANA_MOTION_MIN_MEAN_DIFFERENCE", 4.5, 0, 255),
 
-    minChangedFraction: envFloat(
+    minChanged: envFloat(
       "IRON_ARCANA_MOTION_MIN_CHANGED_FRACTION",
       0.055,
       0,
       1,
     ),
 
-    minSilhouetteFraction: envFloat(
+    minSilhouette: envFloat(
       "IRON_ARCANA_MOTION_MIN_SILHOUETTE_CHANGED_FRACTION",
       0.018,
       0,
       1,
     ),
 
-    contactMeanDifference: envFloat(
+    contactMean: envFloat(
       "IRON_ARCANA_CONTACT_MIN_MEAN_DIFFERENCE",
       5.5,
       0,
       255,
     ),
 
-    contactChangedFraction: envFloat(
+    contactChanged: envFloat(
       "IRON_ARCANA_CONTACT_MIN_CHANGED_FRACTION",
       0.065,
       0,
       1,
     ),
 
-    contactSilhouetteFraction: envFloat(
+    contactSilhouette: envFloat(
       "IRON_ARCANA_CONTACT_MIN_SILHOUETTE_CHANGED_FRACTION",
       0.025,
+      0,
+      1,
+    ),
+
+    walkPassingMean: envFloat("IRON_ARCANA_WALK_PASSING_MIN_MEAN", 9.0, 0, 255),
+
+    walkPassingChanged: envFloat(
+      "IRON_ARCANA_WALK_PASSING_MIN_CHANGED",
+      0.1,
+      0,
+      1,
+    ),
+
+    walkPassingSilhouette: envFloat(
+      "IRON_ARCANA_WALK_PASSING_MIN_SILHOUETTE",
+      0.04,
       0,
       1,
     ),
@@ -258,6 +322,20 @@ const CONFIG = {
     retryWeakPose: envBool("IRON_ARCANA_RETRY_WEAK_POSE", true),
 
     maxAttempts: envInt("IRON_ARCANA_MOTION_MAX_ATTEMPTS", 2, 1, 4),
+  },
+
+  animations: {
+    walkFrames: 4,
+
+    attackFrames: 6,
+
+    hitVariants: envInt("IRON_ARCANA_HIT_VARIANTS", 2, 1, 4),
+
+    hitFrames: envInt("IRON_ARCANA_HIT_FRAMES", 3, 2, 5),
+
+    deathFrames: envInt("IRON_ARCANA_DEATH_FRAMES", 5, 3, 8),
+
+    corpseVariants: envInt("IRON_ARCANA_CORPSE_VARIANTS", 3, 1, 6),
   },
 
   network: {
@@ -279,8 +357,16 @@ const CONFIG = {
 const FORCE = process.argv.includes("--force");
 
 if (CONFIG.appearance.minStdScale > CONFIG.appearance.maxStdScale) {
-  throw new Error("IRON_ARCANA_APPEARANCE_MIN_STD_SCALE must be <= max scale");
+  throw new Error(
+    "IRON_ARCANA_APPEARANCE_MIN_STD_SCALE must be <= IRON_ARCANA_APPEARANCE_MAX_STD_SCALE",
+  );
 }
+
+/*
+|--------------------------------------------------------------------------
+| DIRECTIONS / SEEDS
+|--------------------------------------------------------------------------
+*/
 
 const DIRECTIONS = ["southwest", "southeast", "northeast", "northwest"];
 
@@ -311,11 +397,17 @@ const SEEDS = {
   corpseNorthwest: 10000,
 };
 
-const PHASE_SEED_OFFSET = [0, 37, 1009, 1046, 2018, 2055, 3027, 3064];
+const PHASE_SEED_OFFSETS = [0, 37, 1009, 1046, 2018, 2055, 3027, 3064];
 
 function phaseSeed(base, frame) {
-  return base + PHASE_SEED_OFFSET[frame % PHASE_SEED_OFFSET.length];
+  return base + PHASE_SEED_OFFSETS[frame % PHASE_SEED_OFFSETS.length];
 }
+
+/*
+|--------------------------------------------------------------------------
+| LOGGING / TIMINGS
+|--------------------------------------------------------------------------
+*/
 
 const METRICS = {
   start: performance.now(),
@@ -323,7 +415,9 @@ const METRICS = {
   stages: [],
 
   aiJobs: 0,
+
   aiFailures: 0,
+
   aiMs: 0,
 };
 
@@ -394,9 +488,9 @@ function printSummary() {
 
   for (const item of METRICS.stages) {
     console.log(
-      `${
-        item.ok ? "OK " : "ERR"
-      } ${item.name.padEnd(30)} ${formatDuration(item.ms)}`,
+      `${item.ok ? "OK " : "ERR"} ${item.name.padEnd(32)} ${formatDuration(
+        item.ms,
+      )}`,
     );
   }
 
@@ -420,6 +514,12 @@ function printSummary() {
 
   console.log("======================================");
 }
+
+/*
+|--------------------------------------------------------------------------
+| PATHS
+|--------------------------------------------------------------------------
+*/
 
 const PATHS = {
   sourceAI: path.join(CONFIG.outputDir, "source-ai"),
@@ -455,7 +555,7 @@ async function ensureDir(dir) {
   });
 }
 
-function getSourceAIPath(cleanPath) {
+function sourceAIPath(cleanPath) {
   return path.join(
     PATHS.sourceAI,
 
@@ -491,6 +591,12 @@ function spritePath(animation, direction, frame = 0, variant = null) {
       );
 }
 
+function masterForDirection(direction) {
+  return direction === "southwest"
+    ? PATHS.masterFrontLeft
+    : PATHS.masterBackLeft;
+}
+
 async function prepareDirectories() {
   const dirs = [
     PATHS.sourceAI,
@@ -512,7 +618,7 @@ async function prepareDirectories() {
     }
   }
 
-  for (let variant = 0; variant < CONFIG.hitVariants; variant++) {
+  for (let variant = 0; variant < CONFIG.animations.hitVariants; variant++) {
     for (const direction of DIRECTIONS) {
       dirs.push(path.join(PATHS.raw, "hit", `variant-${variant}`, direction));
 
@@ -532,7 +638,7 @@ async function prepareDirectories() {
     }
   }
 
-  for (let variant = 0; variant < CONFIG.corpseVariants; variant++) {
+  for (let variant = 0; variant < CONFIG.animations.corpseVariants; variant++) {
     for (const direction of DIRECTIONS) {
       dirs.push(
         path.join(PATHS.raw, "corpse", `variant-${variant}`, direction),
@@ -563,11 +669,11 @@ async function prepareDirectories() {
   }
 }
 
-function masterForDirection(direction) {
-  return direction === "southwest"
-    ? PATHS.masterFrontLeft
-    : PATHS.masterBackLeft;
-}
+/*
+|--------------------------------------------------------------------------
+| PROMPTS
+|--------------------------------------------------------------------------
+*/
 
 const ISOMETRIC_CAMERA = `
 CAMERA AND PROJECTION:
@@ -582,7 +688,7 @@ Use orthographic dimetric projection compatible with classic
 
 There is NO perspective convergence.
 
-ALL images must preserve exactly the same:
+Preserve exactly:
 
 - camera elevation
 - camera angle
@@ -605,7 +711,7 @@ Use one completely uniform chroma-key matte background.
 
 Exact requested matte color:
 
-${CONFIG.chromaHex}
+${CONFIG.chroma.hex}
 
 There is NO floor.
 
@@ -613,16 +719,12 @@ There is NO visible ground surface.
 
 ABSOLUTELY NO SHADOW IS ALLOWED.
 
-Forbidden outside the creature silhouette:
+Forbidden outside the intended subject silhouette:
 
 - cast shadow
 - contact shadow
 - ground shadow
 - ambient occlusion
-- gray darkening
-- black darkening
-- brown darkening
-- grounding ellipse
 - floor mark
 - dust
 - debris
@@ -631,16 +733,10 @@ Forbidden outside the creature silhouette:
 - background gradient
 - background texture
 
-The area directly beneath every paw, belly and tail
-must remain chroma matte.
-
-Do not cast chroma-colored rim light onto the creature.
+Do not cast chroma-colored rim light onto the subject.
 `.trim();
 
 const NO_SYMBOLS = `
-Render only the creature and, only where explicitly requested,
-restrained blood/wounds.
-
 Do not render:
 
 - arrows
@@ -657,97 +753,6 @@ Do not render:
 - motion lines
 `.trim();
 
-const ANATOMY_INTEGRITY = `
-ANATOMY INTEGRITY IS A HARD REQUIREMENT:
-
-The creature has exactly four anatomical limbs.
-
-Every visible paw must be physically attached to its
-corresponding leg by one continuous anatomical shape.
-
-When a leg moves, move the ENTIRE LIMB including the paw.
-
-The previous paw position must disappear completely.
-
-STRICTLY FORBIDDEN:
-
-- detached paw
-- floating paw
-- leftover paw from reference pose
-- duplicate paw
-- ghost paw
-- extra limb
-- duplicated leg
-- disconnected foot
-- old limb fragment remaining on the matte
-- two paws belonging to one leg
-
-Do not add a new paw while leaving the old paw behind.
-
-REPLACE the old limb pose with the new limb pose.
-`.trim();
-
-const TAIL_INTEGRITY = `
-TAIL DESIGN IS A HARD CHARACTER IDENTITY REQUIREMENT:
-
-The rat has exactly ONE normal biological rat tail.
-
-TAIL COLOR:
-
-- muted dirty flesh-pink
-- slightly darker pink only near the base
-- smooth natural color transition
-- subtle restrained shading only
-
-THE TAIL MUST NEVER HAVE:
-
-- black rings
-- dark rings
-- gray rings
-- stripes
-- bands
-- alternating colors
-- segmented coloration
-- raccoon-like markings
-- reptile markings
-- armor-like segments
-- wrapped bands
-- painted bands
-- black sections
-- charcoal sections
-- decorative patterns
-- abrupt repeated dark/light boundaries
-
-IMPORTANT:
-
-The tail is NOT striped.
-
-The tail is NOT ringed.
-
-The tail is NOT segmented by color.
-
-It must remain one continuous flesh-pink rat tail
-from base to tip.
-
-The base may be only slightly darker than the tip,
-but there must be NO abrupt color boundaries.
-
-TAIL ANATOMY:
-
-- one continuous tail
-- long and thin
-- smoothly tapered
-- smooth natural curve
-- physically attached to the pelvis
-- gradually thinner toward the tip
-- no fork
-- no duplicate tail
-- no detached tail
-- no sudden thickness changes
-- no knots
-- no unnatural sharp joints
-`.trim();
-
 const RAT_STYLE = `
 CHARACTER:
 
@@ -755,7 +760,7 @@ A hostile sewer rat enemy from a grim dark medieval fantasy MMORPG.
 
 BODY:
 
-- lean compact body
+- lean compact rat body
 - low predatory stance
 - tense shoulders
 - strong hindquarters
@@ -770,34 +775,40 @@ FUR:
 
 HEAD:
 
-- narrow aggressive muzzle
+- narrow aggressive rat muzzle
 - hostile dark amber-red eye
 - tiny eye highlight
 - muted dirty pink nose
 - tense whiskers
-- slightly ragged ears
 
-TAIL:
+EARS:
 
-- one normal biological rat tail
-- long
-- thin
-- smoothly tapered
-- muted dirty flesh-pink
-- almost uniform pink coloration
-- only subtle natural shading
-- base may be slightly darker pink
-- smooth continuous transition from base to tip
-- absolutely no stripes
-- absolutely no rings
-- absolutely no black bands
-- absolutely no segmented coloration
+- exactly TWO anatomical ears total
+- one near ear
+- one far ear
+- normal rat ear anatomy
+- muted dirty pink inner ear
+- no third ear
+- no duplicated ear
 
 PAWS:
 
 - dirty muted pink
 - visible toes
 - tiny dark claws
+
+TAIL:
+
+- exactly one normal biological rat tail
+- long and thin
+- smoothly tapered
+- muted dirty flesh-pink
+- mostly uniform pink coloration
+- only subtle natural shading
+- NO stripes
+- NO rings
+- NO black bands
+- NO segmented coloration
 
 MOOD:
 
@@ -807,18 +818,125 @@ MOOD:
 - suspicious
 - dangerous
 
-Do not make it:
+Do not make the rat:
 
 - cute
 - friendly
-- cuddly
 - plush
-- glossy
 - magical
 - undead
 - mutated
+`.trim();
 
-It must remain clearly recognizable as a normal rat.
+const TAIL_INTEGRITY = `
+TAIL INTEGRITY — HARD REQUIREMENT:
+
+The rat has exactly ONE normal biological rat tail.
+
+The tail must be:
+
+- one continuous anatomical shape
+- physically attached to the pelvis
+- long
+- thin
+- smoothly tapered toward the tip
+- muted dirty flesh-pink
+- visually continuous from base to tip
+
+STRICTLY FORBIDDEN ON THE TAIL:
+
+- black rings
+- dark rings
+- gray rings
+- stripes
+- bands
+- alternating colors
+- segmented coloration
+- raccoon-like markings
+- reptile-like markings
+- armor-like segments
+- wrapped bands
+- black sections
+- decorative patterns
+
+The base may be slightly darker pink than the tip,
+but there must be NO repeated banding or rings.
+`.trim();
+
+const EAR_INTEGRITY = `
+EAR ANATOMY — ABSOLUTE HARD REQUIREMENT:
+
+THE RAT HAS EXACTLY TWO EARS TOTAL.
+
+COUNT THEM BEFORE FINISHING THE IMAGE:
+
+EAR 1:
+- one near ear attached to one side of the skull
+
+EAR 2:
+- one far ear attached to the opposite side of the skull
+
+THERE IS NO EAR 3.
+
+STRICTLY FORBIDDEN:
+
+- third ear
+- extra ear
+- duplicated ear
+- duplicated near ear
+- duplicated far ear
+- double far ear
+- additional pink ear behind the skull
+- additional pink shape above the skull
+- extra triangular pink flap
+- extra triangular dark flap
+- ear-like horn
+- ear-like spike
+- detached ear
+- two ears growing from the same skull side
+- three triangular shapes on top of the head
+- hidden extra ear behind another ear
+
+IMPORTANT:
+
+Do NOT interpret fur tufts as an additional ear.
+
+Do NOT draw a third triangular silhouette
+between or behind the two ears.
+
+The complete head silhouette must contain
+EXACTLY TWO ear protrusions.
+
+FINAL EAR COUNT:
+
+2
+
+NOT 3.
+
+NOT 4.
+
+EXACTLY 2.
+`.trim();
+
+const ANATOMY_INTEGRITY = `
+ANATOMY INTEGRITY — HARD REQUIREMENT:
+
+The rat has exactly four anatomical limbs.
+
+Every visible paw must remain attached to its corresponding leg.
+
+When a leg moves, move the ENTIRE LIMB including the paw.
+
+STRICTLY FORBIDDEN:
+
+- detached paw
+- floating paw
+- duplicate paw
+- ghost paw
+- extra limb
+- duplicated leg
+- disconnected foot
+- residual old limb fragment
 `.trim();
 
 const ART_STYLE = `
@@ -829,8 +947,8 @@ ART STYLE:
 - strong dark outline
 - crisp boundaries
 - controlled flat colors
-- restrained shading INSIDE the creature silhouette only
-- enough detail for later ${CONFIG.spriteSize}x${CONFIG.spriteSize} pixel-art reduction
+- restrained shading inside the subject silhouette
+- enough detail for later ${CONFIG.sprite.size}x${CONFIG.sprite.size} pixel-art reduction
 - approximately 16 to 28 useful colors
 
 DO NOT USE:
@@ -839,33 +957,38 @@ DO NOT USE:
 - painterly rendering
 - airbrush
 - soft focus
-- blurred edges
 - excessive gradients
 - photographic fur texture
 - cinematic lighting
 `.trim();
 
 const IDENTITY_LOCK = `
-REFERENCE IS THE CANONICAL CHARACTER MODEL.
+REFERENCE IS THE CANONICAL CHARACTER APPEARANCE.
 
-Preserve exactly:
+Preserve:
 
-- skull shape
+- species
+- skull proportions
 - muzzle proportions
 - eye color
-- eye position
-- ear shape
+- ear design
+- exactly TWO ears
 - fur palette
 - body mass
-- body proportions
 - paw material
 - tail thickness
-- tail color
+- pink tail material
 - line-art style
 
-Animate pose only.
+IMPORTANT:
 
-Do not redesign or reinterpret the rat.
+The reference is NOT a pose template.
+
+The reference is NOT an orientation template.
+
+When the requested pose or facing differs,
+IGNORE the reference pose
+and obey the requested pose/facing.
 `.trim();
 
 const COLOR_LOCK_PROMPT = `
@@ -875,7 +998,7 @@ The reference image is the color authority.
 
 Do NOT:
 
-- darken the rat
+- darken the rat globally
 - shift fur hue
 - change exposure
 - change gamma
@@ -886,6 +1009,12 @@ The same body part must keep approximately
 the same material color and brightness
 in every animation frame.
 `.trim();
+
+/*
+|--------------------------------------------------------------------------
+| MASTER FRONT LEFT
+|--------------------------------------------------------------------------
+*/
 
 const MASTER_FRONT_LEFT_PROMPT = `
 Create one isolated fantasy sewer rat enemy.
@@ -900,9 +1029,6 @@ Its nose points lower-left.
 
 Its rear body extends upper-right.
 
-Its tail extends naturally backward from the pelvis
-and remains fully visible.
-
 This is a THREE-QUARTER FRONT-AND-SIDE VIEW.
 
 The viewer sees:
@@ -911,37 +1037,34 @@ The viewer sees:
 - nose
 - one hostile eye
 - chest
-- side torso
-- upper back
+- side of torso
+- upper surface of back
 - all four limbs
 - hindquarters
-- ears
+- EXACTLY TWO ears
 - tail
 
-It must clearly read as an isometric game sprite
-rather than a side profile.
+HEAD SILHOUETTE:
+
+There are exactly TWO ear protrusions above the skull.
+
+One near ear.
+
+One far ear.
+
+There is NO third triangular object.
+
+There is NO third ear.
 
 ${RAT_STYLE}
 
-${TAIL_INTEGRITY}
+${EAR_INTEGRITY}
 
-${ART_STYLE}
+${TAIL_INTEGRITY}
 
 ${ANATOMY_INTEGRITY}
 
-TAIL FINAL CHECK BEFORE RENDER COMPLETES:
-
-Inspect the entire tail from pelvis to tip.
-
-It must be one continuous muted flesh-pink tail.
-
-There must be:
-
-ZERO black rings.
-ZERO dark bands.
-ZERO gray rings.
-ZERO repeated stripes.
-ZERO alternating dark/light tail segments.
+${ART_STYLE}
 
 Full body visible.
 
@@ -954,48 +1077,66 @@ ${NO_SYMBOLS}
 ${CHROMA_BACKGROUND}
 `.trim();
 
+/*
+|--------------------------------------------------------------------------
+| MASTER BACK LEFT
+|--------------------------------------------------------------------------
+*/
+
 const MASTER_BACK_LEFT_PROMPT = `
-Use the reference image as the EXACT SAME RAT.
+Use the reference image ONLY as the appearance and character reference
+for the SAME RAT.
 
-${IDENTITY_LOCK}
+REFERENCE USAGE RULES — HIGHEST PRIORITY:
 
-${COLOR_LOCK_PROMPT}
+COPY FROM THE REFERENCE:
 
-${TAIL_INTEGRITY}
+- rat identity
+- fur palette
+- body proportions
+- paw design
+- eye style
+- TWO-ear anatomy
+- pink tail material
+- line-art style
+
+DO NOT COPY FROM THE REFERENCE:
+
+- pose
+- facing direction
+- head direction
+- limb placement
+- silhouette
+- exact tail curve
+
+THE REFERENCE POSE MUST BE REPLACED.
+
+THE REFERENCE ORIENTATION MUST BE REPLACED.
 
 ${ISOMETRIC_CAMERA}
 
-CHANGE ONLY ORIENTATION.
+MANDATORY NEW ORIENTATION:
 
 The rat faces diagonally toward SCREEN UPPER-LEFT.
 
+Its nose points UPPER-LEFT.
+
+Its nose must NOT point lower-left.
+
 The head is farther from the viewer.
 
-The rear body occupies more of the lower-right area.
+The rat faces AWAY from the viewer.
 
-The tail extends naturally backward from the same
-pelvis attachment point.
+The rear body extends toward SCREEN LOWER-RIGHT.
 
-This is a THREE-QUARTER BACK-AND-SIDE VIEW.
-
-Preserve the exact tail anatomy and exact continuous
-flesh-pink tail coloration from the reference.
-
-Do NOT introduce:
-
-- rings
-- bands
-- stripes
-- dark segments
-- alternating tail colors
-- black tail markings
-
-when rotating the rat.
+This is a genuine THREE-QUARTER BACK-AND-SIDE VIEW.
 
 The viewer mainly sees:
 
-- back of skull
-- rear ear surfaces
+- back/rear of skull
+- rear surface of near ear
+- rear surface of far ear
+- EXACTLY TWO ears total
 - upper neck
 - upper back
 - spine
@@ -1004,134 +1145,211 @@ The viewer mainly sees:
 - paws
 - tail
 
-Only a small amount of muzzle may remain visible.
+Only a SMALL amount of muzzle may remain visible.
 
-${RAT_STYLE}
+The chest must NOT dominate the image.
 
-${ART_STYLE}
+The back and shoulders must dominate more than the chest.
+
+This must NOT look like the lower-left/front master.
+
+This must NOT be the same pose with tiny edits.
+
+This must NOT be a mirrored lower-left/front pose.
+
+Imagine physically walking around the SAME rat
+to the opposite diagonal side.
+
+EAR COUNT CHECK:
+
+Visible anatomical ears total = 2.
+
+There must NOT be:
+
+- a third ear behind the near ear
+- a third triangular point above the skull
+- a duplicated far ear
+- an extra pink flap between ears
+- an ear-like fur spike
+
+${EAR_INTEGRITY}
+
+${TAIL_INTEGRITY}
 
 ${ANATOMY_INTEGRITY}
+
+${ART_STYLE}
 
 Full body visible.
 
 Centered composition.
+
+Keep generous empty matte around the rat.
 
 ${NO_SYMBOLS}
 
 ${CHROMA_BACKGROUND}
 `.trim();
 
+/*
+|--------------------------------------------------------------------------
+| WALK SOUTHWEST
+|--------------------------------------------------------------------------
+*/
+
 const WALK_SW = [
   `
-WALK CONTACT A.
-
-Make a strong readable walk stride.
+WALK CONTACT A — STRONG READABLE STRIDE.
 
 Near-side FRONT leg:
 
-- extends clearly forward toward SCREEN LOWER-LEFT
-- paw moves at least one full paw length beyond idle
-- paw projects clearly past the chest
+- extend clearly toward SCREEN LOWER-LEFT
+- move the paw at least one full paw length beyond idle
+- paw clearly projects past the chest
 
 Far-side FRONT leg:
 
-- pulls back beneath chest
+- pull backward beneath the chest
 
 Near-side HIND leg:
 
-- moves forward
-- bends visibly
+- move forward
+- bend visibly
 
 Far-side HIND leg:
 
-- extends clearly backward toward SCREEN UPPER-RIGHT
+- extend clearly backward toward SCREEN UPPER-RIGHT
 
 BODY:
 
-- shoulders shift forward slightly
+- shoulders shift forward
 - pelvis counter-shifts
-- torso changes weight distribution
+- weight distribution changes
 
-The difference must remain obvious after 96x96 reduction.
+This limb arrangement must remain obvious
+after ${CONFIG.sprite.size}x${CONFIG.sprite.size} reduction.
 `.trim(),
 
   `
-WALK PASSING A.
+WALK PASSING A — STRONG MID-SWING FRAME.
 
-Starting from Contact A:
+THIS MUST NOT LOOK LIKE CONTACT A.
 
-Near-side FRONT leg:
-
-- retracts
-- lifts clearly away from its old contact position
-
-Far-side FRONT leg:
-
-- swings forward
-
-Near-side HIND paw:
-
-- passes forward beneath belly
-
-Far-side HIND leg:
-
-- recovers beneath hindquarters
-
-Torso rises slightly.
-
-Paw displacement must be at least one paw length.
-`.trim(),
-
-  `
-WALK CONTACT B.
-
-Make the unmistakably OPPOSITE stride from Contact A.
-
-Far-side FRONT leg:
-
-- extends forward toward SCREEN LOWER-LEFT
+THIS MUST NOT LOOK LIKE CONTACT B.
 
 Near-side FRONT leg:
 
-- pulls back
+- lift the ENTIRE front paw clearly OFF the ground
+- lift the paw vertically by a clearly visible amount
+- create a visible chroma-green gap beneath the paw
+- bend wrist
+- bend elbow
+- move the paw backward beneath the chest
 
-Far-side HIND leg:
+Far-side FRONT leg:
 
-- moves forward
+- swing the ENTIRE limb clearly forward toward SCREEN LOWER-LEFT
+- extend elbow
+- move paw toward future contact point
+- paw is NOT planted yet
 
 Near-side HIND leg:
 
-- extends backward toward SCREEN UPPER-RIGHT
+- lift and pass beneath belly
+- visibly change knee angle
 
-Reverse the diagonal limb arrangement
-and body weight shift from Contact A.
+Far-side HIND leg:
+
+- recover forward beneath hindquarters
+
+BODY:
+
+- torso rises clearly above contact pose
+- shoulders rise
+- belly rises
+- spine elongates slightly
+- center of weight moves between both contact phases
+
+CRITICAL ${CONFIG.sprite.size}x${CONFIG.sprite.size} READABILITY:
+
+The lifted paw MUST remain visibly separated from the ground
+after reduction to ${CONFIG.sprite.size}x${CONFIG.sprite.size}.
+
+Do NOT merely move toes.
+
+Do NOT merely shift the paw a few pixels.
+
+Move the WHOLE limb.
 `.trim(),
 
   `
-WALK PASSING B.
-
-Opposite of Passing A.
+WALK CONTACT B — CLEAR OPPOSITE STRIDE.
 
 Far-side FRONT leg:
 
-- retracts
-- lifts
+- extend forward toward SCREEN LOWER-LEFT
 
 Near-side FRONT leg:
 
-- swings forward
+- pull backward beneath chest
 
-Far-side HIND paw:
+Far-side HIND leg:
 
-- passes forward
+- move forward
 
 Near-side HIND leg:
 
-- recovers beneath body
+- extend backward toward SCREEN UPPER-RIGHT
 
-Torso rises slightly.
+Reverse the diagonal limb arrangement from Contact A.
 
-Clearly different from Contact B.
+The silhouette must visibly differ from Contact A.
+`.trim(),
+
+  `
+WALK PASSING B — STRONG OPPOSITE MID-SWING FRAME.
+
+THIS MUST NOT LOOK LIKE CONTACT B.
+
+THIS MUST NOT LOOK LIKE CONTACT A.
+
+Far-side FRONT leg:
+
+- lift the ENTIRE paw clearly OFF the ground
+- create a visible chroma-green gap beneath the lifted paw
+- bend wrist
+- bend elbow
+- retract beneath chest
+
+Near-side FRONT leg:
+
+- swing clearly forward toward SCREEN LOWER-LEFT
+- extend elbow
+- paw approaches next contact
+- paw is NOT planted yet
+
+Far-side HIND leg:
+
+- lift and pass beneath belly
+
+Near-side HIND leg:
+
+- recover forward
+
+BODY:
+
+- torso rises clearly above contact pose
+- shoulders rise
+- belly rises
+- spine elongates slightly
+
+CRITICAL ${CONFIG.sprite.size}x${CONFIG.sprite.size} READABILITY:
+
+The lifted paw MUST remain visibly separated from the ground.
+
+Move the WHOLE limb.
+
+Do NOT merely move toes.
 `.trim(),
 ];
 
@@ -1141,6 +1359,12 @@ const WALK_NW = WALK_SW.map((text) =>
     .replaceAll("SCREEN UPPER-RIGHT", "SCREEN LOWER-RIGHT"),
 );
 
+/*
+|--------------------------------------------------------------------------
+| ATTACK
+|--------------------------------------------------------------------------
+*/
+
 const ATTACK_SW = [
   `
 ATTACK ANTICIPATION.
@@ -1149,12 +1373,11 @@ Crouch lower.
 
 Compress hind legs.
 
-Shoulders and head pull back.
+Pull shoulders and head backward.
 
 Ears angle backward.
 
-Tail stiffens naturally without changing
-its color or design.
+Tail stiffens naturally.
 `.trim(),
 
   `
@@ -1230,30 +1453,40 @@ const ATTACK_NW = ATTACK_SW.map((text) =>
   text.replaceAll("SCREEN LOWER-LEFT", "SCREEN UPPER-LEFT"),
 );
 
-const HIT_VARIANT_PROMPTS = [
+/*
+|--------------------------------------------------------------------------
+| HIT REACTIONS
+|--------------------------------------------------------------------------
+*/
+
+const HIT_VARIANTS = [
   [
     `
 DAMAGE REACTION A — IMPACT.
 
-A hit from front-left makes:
+Hit from front-left.
 
-- head snap back
-- shoulders snap back
-- near front paw lift clearly
-- torso compress
-- hind legs brace
-- ears flatten
-- tail flick naturally
+Head snaps backward.
+
+Shoulders snap backward.
+
+Near front paw lifts clearly.
+
+Torso compresses.
+
+Hind legs brace.
+
+Ears flatten.
+
+Tail flicks.
 
 Rat remains alive.
-
-No blood required.
 `.trim(),
 
     `
 DAMAGE REACTION A — PEAK STAGGER.
 
-Torso twists away from impact.
+Torso twists away.
 
 Lifted paw remains displaced.
 
@@ -1273,15 +1506,17 @@ Torso untwists.
 
 Head rises.
 
-Keep a small residual stagger.
+Keep residual stagger.
 
-Do not make this frame identical to idle.
+Do not make this identical to idle.
 `.trim(),
   ],
 
   [
     `
-DAMAGE REACTION B — SIDE IMPACT.
+DAMAGE REACTION B — IMPACT.
+
+Side impact.
 
 Torso jerks sideways.
 
@@ -1293,13 +1528,13 @@ Head dips.
 
 Ears pin.
 
-Tail whips for balance.
+Tail whips.
 
 Rat remains alive.
 `.trim(),
 
     `
-DAMAGE REACTION B — LOW STAGGER.
+DAMAGE REACTION B — PEAK.
 
 Front half drops.
 
@@ -1315,7 +1550,7 @@ DAMAGE REACTION B — RECOVERY.
 
 Shoulders rise.
 
-Paws move back toward support.
+Paws return toward support.
 
 Hind paw steps inward.
 
@@ -1325,6 +1560,12 @@ Keep residual stagger.
 `.trim(),
   ],
 ];
+
+/*
+|--------------------------------------------------------------------------
+| DEATH
+|--------------------------------------------------------------------------
+*/
 
 const DEATH_PROMPTS = [
   `
@@ -1338,11 +1579,11 @@ One front paw leaves ground.
 
 Legs begin losing support.
 
-Add only a small dark-red wound.
+Small dark-red torso wound.
 `.trim(),
 
   `
-DEATH FRAME 1 — LEGS BUCKLE.
+DEATH FRAME 1 — BUCKLE.
 
 Chest drops.
 
@@ -1352,7 +1593,7 @@ One hind leg slides.
 
 Head lowers.
 
-Add a small restrained blood smear.
+Small restrained blood smear.
 `.trim(),
 
   `
@@ -1368,7 +1609,7 @@ Hind legs fold or slide.
 
 Tail falls slack.
 
-Moderate dark-red blood is allowed.
+Moderate dark-red blood.
 `.trim(),
 
   `
@@ -1388,7 +1629,7 @@ Small-to-moderate blood pool touching body.
   `
 DEATH FRAME 4 — DEAD FINAL POSE.
 
-Fully motionless on ground.
+Fully motionless.
 
 Head sideways.
 
@@ -1410,6 +1651,12 @@ No exposed organs.
 `.trim(),
 ];
 
+/*
+|--------------------------------------------------------------------------
+| CORPSES
+|--------------------------------------------------------------------------
+*/
+
 const CORPSE_PROMPTS = [
   `
 CORPSE VARIANT A.
@@ -1424,8 +1671,7 @@ Front legs folded.
 
 Hind legs collapsed.
 
-Tail has a slack natural curve
-and remains a continuous flesh-pink rat tail.
+Slack natural tail curve.
 
 Lifeless eye.
 
@@ -1433,7 +1679,7 @@ Torn fur.
 
 One wound.
 
-Restrained blood pool touching body.
+Restrained blood pool.
 `.trim(),
 
   `
@@ -1445,9 +1691,9 @@ Head low.
 
 One foreleg extended.
 
-One foreleg folded.
+Other foreleg folded.
 
-Uneven hind-leg arrangement.
+Uneven hind legs.
 
 Different slack tail curve.
 
@@ -1465,7 +1711,7 @@ Torso slightly curled.
 
 Head tucked low.
 
-Asymmetric folded forelegs.
+Asymmetric forelegs.
 
 One hind leg more stretched.
 
@@ -1480,20 +1726,26 @@ Small blood pool.
 function orientationPrompt(direction) {
   return direction === "southwest"
     ? `
-Rat faces SCREEN LOWER-LEFT
-in three-quarter FRONT-AND-SIDE isometric view.
+Rat faces SCREEN LOWER-LEFT.
+
+Maintain THREE-QUARTER FRONT-AND-SIDE isometric view.
 
 Head remains lower-left.
 
-Rear body remains upper-right.
+Rear body extends upper-right.
 `.trim()
     : `
-Rat faces SCREEN UPPER-LEFT
-in three-quarter BACK-AND-SIDE isometric view.
+Rat faces SCREEN UPPER-LEFT.
+
+Maintain THREE-QUARTER BACK-AND-SIDE isometric view.
+
+The rat faces AWAY from the viewer.
 
 Head remains upper-left.
 
-Rear body remains lower-right.
+Rear body extends lower-right.
+
+Back and shoulders remain more visible than chest.
 `.trim();
 }
 
@@ -1508,6 +1760,8 @@ ${IDENTITY_LOCK}
 ${COLOR_LOCK_PROMPT}
 
 ${TAIL_INTEGRITY}
+
+${EAR_INTEGRITY}
 
 ${ISOMETRIC_CAMERA}
 
@@ -1545,7 +1799,7 @@ Do not zoom in.
 Do not zoom out.
 
 Do not translate the entire rat across the canvas
-merely to show motion.
+merely to fake motion.
 
 ${ANATOMY_INTEGRITY}
 
@@ -1553,9 +1807,6 @@ ${
   bloodAllowed
     ? `
 Restrained dark-red blood and wounds are allowed.
-
-Blood must be physically associated with
-the injured/dead rat.
 
 No dismemberment.
 
@@ -1577,6 +1828,12 @@ ${NO_SYMBOLS}
 ${CHROMA_BACKGROUND}
 `.trim();
 }
+
+/*
+|--------------------------------------------------------------------------
+| NETWORK
+|--------------------------------------------------------------------------
+*/
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -1649,13 +1906,21 @@ async function fetchJsonRetry(url, options = {}, allowStatuses = []) {
 
       warn(
         "NET",
+
         `attempt ${attempt}/${CONFIG.network.requestAttempts}`,
+
         error.message,
       );
     }
 
     if (attempt < CONFIG.network.requestAttempts) {
-      await sleep(Math.min(8000, 1000 * 2 ** (attempt - 1)));
+      await sleep(
+        Math.min(
+          8000,
+
+          1000 * 2 ** (attempt - 1),
+        ),
+      );
     }
   }
 
@@ -1679,13 +1944,17 @@ async function checkServer() {
     throw new Error("Loaded model/server reports ref_images=false");
   }
 
-  log("SERVER", `OK model=${json?.model?.name ?? "unknown"}`);
+  log(
+    "SERVER",
+
+    `OK model=${json?.model?.name ?? "unknown"}`,
+  );
 }
 
 async function fileToDataUrl(filePath) {
   const buffer = await sharp(filePath).removeAlpha().png().toBuffer();
 
-  return `data:image/png;base64,${buffer.toString("base64")}`;
+  return "data:image/png;base64," + buffer.toString("base64");
 }
 
 function makeNativeRequestBody({ prompt, seed, refImages = [] }) {
@@ -1694,9 +1963,9 @@ function makeNativeRequestBody({ prompt, seed, refImages = [] }) {
 
     negative_prompt: "",
 
-    width: CONFIG.generationSize,
+    width: CONFIG.generation.size,
 
-    height: CONFIG.generationSize,
+    height: CONFIG.generation.size,
 
     seed,
 
@@ -1709,12 +1978,12 @@ function makeNativeRequestBody({ prompt, seed, refImages = [] }) {
     ref_images: refImages,
 
     sample_params: {
-      sample_method: CONFIG.sampler,
+      sample_method: CONFIG.generation.sampler,
 
-      sample_steps: CONFIG.steps,
+      sample_steps: CONFIG.generation.steps,
 
       guidance: {
-        txt_cfg: CONFIG.cfg,
+        txt_cfg: CONFIG.generation.cfg,
       },
     },
 
@@ -1733,7 +2002,7 @@ async function runNativeImageJob({ prompt, seed, reference = null, output }) {
     refImages,
   });
 
-  const jobNumber = METRICS.aiJobs + 1;
+  const jobNumber = METRICS.aiJobs + METRICS.aiFailures + 1;
 
   const started = performance.now();
 
@@ -1838,6 +2107,12 @@ async function runNativeImageJob({ prompt, seed, reference = null, output }) {
   }
 }
 
+/*
+|--------------------------------------------------------------------------
+| COLOR / CHROMA
+|--------------------------------------------------------------------------
+*/
+
 function parseHexColor(hex) {
   const clean = hex.replace("#", "");
 
@@ -1846,19 +2121,21 @@ function parseHexColor(hex) {
   }
 
   return {
-    r: parseInt(clean.slice(0, 2), 16),
+    r: Number.parseInt(clean.slice(0, 2), 16),
 
-    g: parseInt(clean.slice(2, 4), 16),
+    g: Number.parseInt(clean.slice(2, 4), 16),
 
-    b: parseInt(clean.slice(4, 6), 16),
+    b: Number.parseInt(clean.slice(4, 6), 16),
   };
 }
 
-const CHROMA_RGB = parseHexColor(CONFIG.chromaHex);
+const CHROMA_RGB = parseHexColor(CONFIG.chroma.hex);
 
 function rgbToHsv(r, g, b) {
   r /= 255;
+
   g /= 255;
+
   b /= 255;
 
   const max = Math.max(r, g, b);
@@ -1897,7 +2174,11 @@ const CHROMA_HSV = rgbToHsv(CHROMA_RGB.r, CHROMA_RGB.g, CHROMA_RGB.b);
 function hueDistance(a, b) {
   const raw = Math.abs(a - b);
 
-  return Math.min(raw, 360 - raw);
+  return Math.min(
+    raw,
+
+    360 - raw,
+  );
 }
 
 function isChromaColor(r, g, b, loose = false) {
@@ -1943,6 +2224,18 @@ function isBloodColor(r, g, b) {
     r > g * 1.2 &&
     r > b * 1.02
   );
+}
+
+function isEarPink(r, g, b) {
+  const hsv = rgbToHsv(r, g, b);
+
+  const warmHue = hsv.h <= 25 || hsv.h >= 325;
+
+  const redDominant = r > g * 1.04;
+
+  const notDark = hsv.v > 0.25;
+
+  return warmHue && hsv.s >= 0.16 && redDominant && notDark;
 }
 
 function createChromaMask(rgba, width, height, channels) {
@@ -2063,6 +2356,12 @@ function createChromaMask(rgba, width, height, channels) {
   return mask;
 }
 
+/*
+|--------------------------------------------------------------------------
+| APPEARANCE LOCK
+|--------------------------------------------------------------------------
+*/
+
 const APPEARANCE_STATS_CACHE = new Map();
 
 function calculateRgbStats(
@@ -2119,7 +2418,16 @@ function calculateRgbStats(
 
     mean,
 
-    std: m2.map((value) => Math.sqrt(value / Math.max(1, count - 1))),
+    std: m2.map((value) =>
+      Math.sqrt(
+        value /
+          Math.max(
+            1,
+
+            count - 1,
+          ),
+      ),
+    ),
   };
 }
 
@@ -2297,24 +2605,20 @@ async function stabilizeAppearanceToReference(
     .png()
     .toFile(candidatePath);
 
-  const before =
-    candidateStats.mean.reduce(
-      (sum, value) => sum + value,
-
-      0,
-    ) / 3;
-
-  const target =
-    referenceStats.mean.reduce(
-      (sum, value) => sum + value,
-
-      0,
-    ) / 3;
-
   return {
-    before,
-    target,
-    scales,
+    before:
+      candidateStats.mean.reduce(
+        (sum, value) => sum + value,
+
+        0,
+      ) / 3,
+
+    target:
+      referenceStats.mean.reduce(
+        (sum, value) => sum + value,
+
+        0,
+      ) / 3,
   };
 }
 
@@ -2391,165 +2695,36 @@ async function normalizeChroma(
 async function saveGeneratedBuffer(
   buffer,
   output,
-  { direction = null, preserveBlood = false } = {},
+  { appearanceReference = null, preserveBlood = false } = {},
 ) {
-  const sourceOutput = getSourceAIPath(output);
+  const cache = sourceAIPath(output);
 
-  await ensureDir(path.dirname(sourceOutput));
+  await ensureDir(path.dirname(cache));
 
-  await fs.writeFile(sourceOutput, buffer);
+  await fs.writeFile(cache, buffer);
 
-  return normalizeChroma(sourceOutput, output, {
-    appearanceReference: direction ? masterForDirection(direction) : null,
-
+  return normalizeChroma(cache, output, {
+    appearanceReference,
     preserveBlood,
   });
 }
 
-async function analyzeTailBanding(imagePath) {
-  const { data, info } = await sharp(imagePath).ensureAlpha().raw().toBuffer({
-    resolveWithObject: true,
-  });
+/*
+|--------------------------------------------------------------------------
+| IMAGE DIFFERENCE
+|--------------------------------------------------------------------------
+*/
 
-  const rgba = Buffer.from(data);
-
-  const matte = createChromaMask(rgba, info.width, info.height, info.channels);
-
-  let minX = info.width;
-
-  let maxX = -1;
-
-  let minY = info.height;
-
-  let maxY = -1;
-
-  for (let pixel = 0; pixel < matte.length; pixel++) {
-    if (matte[pixel]) {
-      continue;
-    }
-
-    const x = pixel % info.width;
-
-    const y = Math.floor(pixel / info.width);
-
-    minX = Math.min(minX, x);
-
-    maxX = Math.max(maxX, x);
-
-    minY = Math.min(minY, y);
-
-    maxY = Math.max(maxY, y);
-  }
-
-  if (maxX < minX) {
-    return {
-      suspicious: false,
-      score: 0,
-      transitions: 0,
-      samples: 0,
-    };
-  }
-
-  const bboxWidth = maxX - minX + 1;
-
-  const startX = minX + Math.floor(bboxWidth * 0.68);
-
-  const rows = [];
-
-  for (let y = minY; y <= maxY; y += 2) {
-    let pink = 0;
-    let dark = 0;
-
-    for (let x = startX; x <= maxX; x++) {
-      const pixel = y * info.width + x;
-
-      if (matte[pixel]) {
-        continue;
-      }
-
-      const offset = pixel * info.channels;
-
-      const r = rgba[offset];
-
-      const g = rgba[offset + 1];
-
-      const b = rgba[offset + 2];
-
-      const hsv = rgbToHsv(r, g, b);
-
-      const pinkish =
-        (hsv.h < 35 || hsv.h > 335) &&
-        r > g * 1.1 &&
-        r > b * 0.95 &&
-        hsv.s > 0.15;
-
-      const darkish = (r + g + b) / 3 < 75;
-
-      if (pinkish) {
-        pink++;
-      } else if (darkish) {
-        dark++;
-      }
-    }
-
-    if (pink + dark >= 3) {
-      rows.push(pink >= dark ? 1 : 0);
-    }
-  }
-
-  let transitions = 0;
-
-  for (let i = 1; i < rows.length; i++) {
-    if (rows[i] !== rows[i - 1]) {
-      transitions++;
-    }
-  }
-
-  const score = rows.length ? transitions / rows.length : 0;
-
-  return {
-    suspicious: rows.length >= 8 && transitions >= 4 && score > 0.18,
-
-    score,
-    transitions,
-
-    samples: rows.length,
-  };
-}
-
-async function logMasterQa(imagePath) {
-  const qa = await analyzeTailBanding(imagePath);
-
-  if (qa.suspicious) {
-    warn(
-      "MASTER QA",
-
-      `${path.basename(
-        imagePath,
-      )} possible tail banding: transitions=${qa.transitions}/${qa.samples} score=${qa.score.toFixed(
-        2,
-      )}`,
-    );
-  } else {
-    log(
-      "MASTER QA",
-
-      `${path.basename(
-        imagePath,
-      )} tail-band heuristic PASS transitions=${qa.transitions}/${qa.samples}`,
-    );
-  }
-
-  return qa;
-}
-
-async function calculateMotionScore(firstPath, secondPath) {
+async function calculateImageDifference(
+  firstPath,
+  secondPath,
+  analysisSize = CONFIG.motion.analysisSize,
+) {
   const read = (file) =>
     sharp(file)
       .resize(
-        CONFIG.motion.analysisSize,
-
-        CONFIG.motion.analysisSize,
+        analysisSize,
+        analysisSize,
 
         {
           fit: "fill",
@@ -2561,6 +2736,7 @@ async function calculateMotionScore(firstPath, secondPath) {
 
   const [first, second] = await Promise.all([
     read(firstPath),
+
     read(secondPath),
   ]);
 
@@ -2631,46 +2807,478 @@ async function calculateMotionScore(firstPath, secondPath) {
   };
 }
 
-function motionTooSmall(score, strong = false) {
-  const minMean = strong
-    ? CONFIG.motion.contactMeanDifference
-    : CONFIG.motion.minMeanDifference;
-
-  const minChanged = strong
-    ? CONFIG.motion.contactChangedFraction
-    : CONFIG.motion.minChangedFraction;
-
-  const minSilhouette = strong
-    ? CONFIG.motion.contactSilhouetteFraction
-    : CONFIG.motion.minSilhouetteFraction;
-
+function differenceString(score) {
   return (
-    score.meanDifference < minMean ||
-    score.changedFraction < minChanged ||
-    score.silhouetteFraction < minSilhouette
+    `mean=${score.meanDifference.toFixed(2)} ` +
+    `changed=${(score.changedFraction * 100).toFixed(1)}% ` +
+    `silhouette=${(score.silhouetteFraction * 100).toFixed(1)}%`
   );
 }
 
-function motionString(score) {
-  return `mean=${score.meanDifference.toFixed(2)} changed=${(
-    score.changedFraction * 100
-  ).toFixed(1)}% silhouette=${(score.silhouetteFraction * 100).toFixed(1)}%`;
+function thresholdLabel(thresholds) {
+  return (
+    `min=${thresholds.mean.toFixed(2)}/` +
+    `${(thresholds.changed * 100).toFixed(1)}%/` +
+    `${(thresholds.silhouette * 100).toFixed(1)}%`
+  );
 }
+
+function scoreFailsThresholds(score, thresholds) {
+  return (
+    score.meanDifference < thresholds.mean ||
+    score.changedFraction < thresholds.changed ||
+    score.silhouetteFraction < thresholds.silhouette
+  );
+}
+
+function normalMotionThresholds() {
+  return {
+    mean: CONFIG.motion.minMean,
+
+    changed: CONFIG.motion.minChanged,
+
+    silhouette: CONFIG.motion.minSilhouette,
+  };
+}
+
+function contactMotionThresholds() {
+  return {
+    mean: CONFIG.motion.contactMean,
+
+    changed: CONFIG.motion.contactChanged,
+
+    silhouette: CONFIG.motion.contactSilhouette,
+  };
+}
+
+function walkPassingThresholds() {
+  return {
+    mean: CONFIG.motion.walkPassingMean,
+
+    changed: CONFIG.motion.walkPassingChanged,
+
+    silhouette: CONFIG.motion.walkPassingSilhouette,
+  };
+}
+
+function backMasterTooSimilar(score) {
+  let failed = 0;
+
+  if (score.meanDifference < CONFIG.master.perspectiveMinMean) {
+    failed++;
+  }
+
+  if (score.changedFraction < CONFIG.master.perspectiveMinChanged) {
+    failed++;
+  }
+
+  if (score.silhouetteFraction < CONFIG.master.perspectiveMinSilhouette) {
+    failed++;
+  }
+
+  return failed >= 2;
+}
+
+/*
+|--------------------------------------------------------------------------
+| EAR QA
+|--------------------------------------------------------------------------
+|
+| Ищем отдельные розово-красные компоненты в верхней области персонажа.
+|
+| Это эвристика, а не segmentation model.
+|
+| Главная задача — ловить явно появившееся третье ухо.
+|--------------------------------------------------------------------------
+*/
+
+function findConnectedComponents(mask, width, height) {
+  const visited = new Uint8Array(width * height);
+
+  const queue = new Int32Array(width * height);
+
+  const result = [];
+
+  for (let start = 0; start < mask.length; start++) {
+    if (!mask[start] || visited[start]) {
+      continue;
+    }
+
+    let read = 0;
+
+    let write = 0;
+
+    queue[write++] = start;
+
+    visited[start] = 1;
+
+    let pixels = 0;
+
+    let minX = width;
+
+    let minY = height;
+
+    let maxX = -1;
+
+    let maxY = -1;
+
+    while (read < write) {
+      const pixel = queue[read++];
+
+      const x = pixel % width;
+
+      const y = Math.floor(pixel / width);
+
+      pixels++;
+
+      minX = Math.min(minX, x);
+
+      minY = Math.min(minY, y);
+
+      maxX = Math.max(maxX, x);
+
+      maxY = Math.max(maxY, y);
+
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) {
+            continue;
+          }
+
+          const nx = x + dx;
+
+          const ny = y + dy;
+
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) {
+            continue;
+          }
+
+          const next = ny * width + nx;
+
+          if (!mask[next] || visited[next]) {
+            continue;
+          }
+
+          visited[next] = 1;
+
+          queue[write++] = next;
+        }
+      }
+    }
+
+    result.push({
+      pixels,
+
+      minX,
+      minY,
+      maxX,
+      maxY,
+
+      width: maxX - minX + 1,
+
+      height: maxY - minY + 1,
+    });
+  }
+
+  return result;
+}
+
+async function getForegroundBounds(imagePath) {
+  const { data, info } = await sharp(imagePath).ensureAlpha().raw().toBuffer({
+    resolveWithObject: true,
+  });
+
+  const rgba = Buffer.from(data);
+
+  const matte = createChromaMask(
+    rgba,
+
+    info.width,
+    info.height,
+    info.channels,
+  );
+
+  let minX = info.width;
+
+  let minY = info.height;
+
+  let maxX = -1;
+
+  let maxY = -1;
+
+  for (let pixel = 0; pixel < matte.length; pixel++) {
+    if (matte[pixel]) {
+      continue;
+    }
+
+    const x = pixel % info.width;
+
+    const y = Math.floor(pixel / info.width);
+
+    minX = Math.min(minX, x);
+
+    minY = Math.min(minY, y);
+
+    maxX = Math.max(maxX, x);
+
+    maxY = Math.max(maxY, y);
+  }
+
+  if (maxX < minX) {
+    return null;
+  }
+
+  return {
+    minX,
+    minY,
+    maxX,
+    maxY,
+
+    width: maxX - minX + 1,
+
+    height: maxY - minY + 1,
+  };
+}
+
+async function analyzeEarComponents(imagePath) {
+  const { data, info } = await sharp(imagePath).ensureAlpha().raw().toBuffer({
+    resolveWithObject: true,
+  });
+
+  const rgba = Buffer.from(data);
+
+  const matte = createChromaMask(
+    rgba,
+
+    info.width,
+    info.height,
+    info.channels,
+  );
+
+  const bounds = await getForegroundBounds(imagePath);
+
+  if (!bounds) {
+    return {
+      count: 0,
+
+      components: [],
+    };
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | HEAD SEARCH AREA
+  |--------------------------------------------------------------------------
+  |
+  | Для обеих канонических левых ориентаций голова находится слева.
+  |
+  | Ищем розовые компоненты:
+  |
+  | - в левых ~58% foreground bbox
+  | - в верхних ~58% foreground bbox
+  |
+  | Это отсекает большинство лап и хвост.
+  |--------------------------------------------------------------------------
+  */
+
+  const searchMinX = bounds.minX;
+
+  const searchMaxX = Math.min(
+    info.width - 1,
+
+    Math.round(bounds.minX + bounds.width * 0.58),
+  );
+
+  const searchMinY = bounds.minY;
+
+  const searchMaxY = Math.min(
+    info.height - 1,
+
+    Math.round(bounds.minY + bounds.height * 0.58),
+  );
+
+  const pinkMask = new Uint8Array(info.width * info.height);
+
+  for (let y = searchMinY; y <= searchMaxY; y++) {
+    for (let x = searchMinX; x <= searchMaxX; x++) {
+      const pixel = y * info.width + x;
+
+      if (matte[pixel]) {
+        continue;
+      }
+
+      const offset = pixel * info.channels;
+
+      if (
+        isEarPink(
+          rgba[offset],
+
+          rgba[offset + 1],
+
+          rgba[offset + 2],
+        )
+      ) {
+        pinkMask[pixel] = 1;
+      }
+    }
+  }
+
+  const rawComponents = findConnectedComponents(
+    pinkMask,
+    info.width,
+    info.height,
+  );
+
+  const components = rawComponents
+    .filter((component) => {
+      if (component.pixels < CONFIG.master.minEarComponentPixels) {
+        return false;
+      }
+
+      /*
+          | Ухо должно быть хотя бы несколько пикселей
+          | по обеим осям.
+          */
+
+      if (component.width < 4 || component.height < 4) {
+        return false;
+      }
+
+      return true;
+    })
+    .sort((a, b) => b.pixels - a.pixels);
+
+  return {
+    count: components.length,
+
+    components,
+
+    searchArea: {
+      minX: searchMinX,
+
+      maxX: searchMaxX,
+
+      minY: searchMinY,
+
+      maxY: searchMaxY,
+    },
+  };
+}
+
+function earAnalysisString(analysis) {
+  const components = analysis.components
+    .map(
+      (component, index) =>
+        `#${index + 1}:${component.pixels}px/${component.width}x${component.height}`,
+    )
+    .join(",");
+
+  return `count=${analysis.count}` + (components ? ` [${components}]` : "");
+}
+
+async function validateMasterEarQA(imagePath) {
+  if (!CONFIG.master.earQAEnabled) {
+    return {
+      pass: true,
+
+      analysis: {
+        count: 0,
+
+        components: [],
+      },
+    };
+  }
+
+  const analysis = await analyzeEarComponents(imagePath);
+
+  /*
+  |--------------------------------------------------------------------------
+  | ВАЖНО
+  |--------------------------------------------------------------------------
+  |
+  | Для нашей задачи:
+  |
+  | > 2 крупных ear-pink компонентов = REJECT.
+  |
+  | 1 компонент разрешаем, потому что дальнее ухо может частично
+  | сливаться с ближним или скрываться в перспективе.
+  |--------------------------------------------------------------------------
+  */
+
+  return {
+    pass: analysis.count <= CONFIG.master.maxEarComponents,
+
+    analysis,
+  };
+}
+
+/*
+|--------------------------------------------------------------------------
+| VALIDATION
+|--------------------------------------------------------------------------
+*/
+
+async function validateFrameDifferences(output, validations) {
+  const results = [];
+
+  for (const validation of validations) {
+    const score = await calculateImageDifference(
+      validation.path,
+      output,
+
+      validation.analysisSize ?? CONFIG.motion.analysisSize,
+    );
+
+    const failed = scoreFailsThresholds(score, validation.thresholds);
+
+    results.push({
+      label: validation.label,
+
+      score,
+
+      thresholds: validation.thresholds,
+
+      failed,
+    });
+  }
+
+  return {
+    pass: results.every((item) => !item.failed),
+
+    results,
+  };
+}
+
+function validationResultsString(results) {
+  return results
+    .map(
+      (item) =>
+        `${item.label}:{${differenceString(item.score)} ${
+          item.failed ? "LOW" : "OK"
+        } ${thresholdLabel(item.thresholds)}}`,
+    )
+    .join(" | ");
+}
+
+/*
+|--------------------------------------------------------------------------
+| GENERATION HELPERS
+|--------------------------------------------------------------------------
+*/
 
 async function generateStill({
   prompt,
   seed,
   output,
   reference = null,
-  direction = null,
+  appearanceReference = null,
   preserveBlood = false,
 }) {
-  const sourceAI = getSourceAIPath(output);
+  const cache = sourceAIPath(output);
 
-  if (!FORCE && (await exists(sourceAI))) {
-    const cleanInfo = await normalizeChroma(sourceAI, output, {
-      appearanceReference: direction ? masterForDirection(direction) : null,
-
+  if (!FORCE && (await exists(cache))) {
+    const cleanInfo = await normalizeChroma(cache, output, {
+      appearanceReference,
       preserveBlood,
     });
 
@@ -2697,7 +3305,7 @@ async function generateStill({
   });
 
   const cleanInfo = await saveGeneratedBuffer(buffer, output, {
-    direction,
+    appearanceReference,
     preserveBlood,
   });
 
@@ -2716,31 +3324,31 @@ async function generateStill({
 
 async function generateMotionFrame({
   reference,
-  compareTo,
+  validations,
   posePrompt,
   direction,
   seed,
   output,
-  strongMotion = false,
   preserveBlood = false,
   keepHead = true,
   retryWeakPose = true,
 }) {
-  const sourceAI = getSourceAIPath(output);
+  const cache = sourceAIPath(output);
 
-  if (!FORCE && (await exists(sourceAI))) {
-    const cleanInfo = await normalizeChroma(sourceAI, output, {
-      appearanceReference: masterForDirection(direction),
+  const appearanceReference = masterForDirection(direction);
 
+  if (!FORCE && (await exists(cache))) {
+    const cleanInfo = await normalizeChroma(cache, output, {
+      appearanceReference,
       preserveBlood,
     });
 
-    const score = await calculateMotionScore(compareTo, output);
+    const validation = await validateFrameDifferences(output, validations);
 
     log(
       "CACHE",
 
-      `${relativeLabel(output)} ${motionString(score)}${
+      `${relativeLabel(output)} ${validationResultsString(validation.results)}${
         cleanInfo.color
           ? ` color=${cleanInfo.color.before.toFixed(
               1,
@@ -2764,16 +3372,20 @@ async function generateMotionFrame({
 
 CRITICAL MOTION RETRY:
 
-The previous pose was too weak.
+The previous requested pose change was too weak.
 
-Move the requested COMPLETE limbs much farther
-while keeping character identity exact.
+Move the requested COMPLETE limbs much farther.
 
-- move the relevant paw at least one full paw length
+- move relevant paw at least one full paw length
 - visibly bend or extend elbow/knee
-- make the silhouette visibly different after 96x96 reduction
-- preserve skull, muzzle, eye, ears, fur colors and tail design
-- the tail must remain continuous flesh-pink with ZERO rings/bands/stripes
+- change silhouette clearly at ${CONFIG.sprite.size}x${CONFIG.sprite.size}
+- preserve skull
+- preserve muzzle
+- preserve eye
+- preserve EXACTLY TWO ears
+- preserve fur colors
+- preserve requested facing direction
+- tail remains one continuous flesh-pink rat tail
 - no duplicate paw
 - no ghost paw
 - no residual old limb
@@ -2783,25 +3395,26 @@ while keeping character identity exact.
     const buffer = await runNativeImageJob({
       prompt,
 
-      seed: seed + attempt * 7919,
+      seed: seed + attempt * CONFIG.generation.retrySeedOffset,
 
       reference,
+
       output,
     });
 
     const cleanInfo = await saveGeneratedBuffer(buffer, output, {
-      direction,
+      appearanceReference,
       preserveBlood,
     });
 
-    const score = await calculateMotionScore(compareTo, output);
-
-    const weak = motionTooSmall(score, strongMotion);
+    const validation = await validateFrameDifferences(output, validations);
 
     log(
       "MOTION",
 
-      `${relativeLabel(output)} ${motionString(score)} ${weak ? "LOW" : "OK"}${
+      `${relativeLabel(output)} ${validationResultsString(
+        validation.results,
+      )} ${validation.pass ? "PASS" : "RETRY"}${
         cleanInfo.color
           ? ` color=${cleanInfo.color.before.toFixed(
               1,
@@ -2811,7 +3424,7 @@ while keeping character identity exact.
     );
 
     if (
-      weak &&
+      !validation.pass &&
       retryWeakPose &&
       CONFIG.motion.retryWeakPose &&
       attempt + 1 < CONFIG.motion.maxAttempts
@@ -2829,117 +3442,337 @@ while keeping character identity exact.
   }
 }
 
-async function generateMasterWithTailGuard({
-  output,
-  seed,
-  prompt,
-  reference = null,
-}) {
-  const sourceAI = getSourceAIPath(output);
+/*
+|--------------------------------------------------------------------------
+| MASTER GENERATION
+|--------------------------------------------------------------------------
+*/
 
-  if (!FORCE && (await exists(sourceAI))) {
-    await normalizeChroma(sourceAI, output);
-
-    log("CACHE", relativeLabel(output));
-
-    await logMasterQa(output);
-
-    return;
+function backMasterRetryPrompt(attempt, useReference) {
+  if (attempt === 0) {
+    return MASTER_BACK_LEFT_PROMPT;
   }
 
-  for (let attempt = 0; attempt < CONFIG.masterMaxAttempts; attempt++) {
-    let finalPrompt = prompt;
+  return `${MASTER_BACK_LEFT_PROMPT}
+
+MASTER RETRY ${attempt + 1}.
+
+THE PREVIOUS RESULT FAILED QUALITY CONTROL.
+
+POSSIBLE REASONS:
+
+- perspective was too similar to front master
+- third ear appeared
+- duplicated ear appeared
+- extra triangular pink flap appeared
+
+${
+  useReference
+    ? `
+REFERENCE IMAGE RULE:
+
+Use reference ONLY for:
+
+- fur color
+- body proportions
+- eye design
+- ear design
+- exactly TWO-ear anatomy
+- tail material
+- line-art style
+
+DO NOT preserve the reference pose.
+
+DO NOT preserve the reference facing.
+`.trim()
+    : `
+NO reference image is supplied on this fallback attempt.
+
+Recreate the same described rat,
+but prioritize correct BACK-LEFT orientation
+and correct anatomy.
+`.trim()
+}
+
+FORCE THE BACK-LEFT VIEW:
+
+- nose points SCREEN UPPER-LEFT
+- nose MUST NOT point lower-left
+- rat faces AWAY from viewer
+- back of skull visible
+- upper back visible
+- spine visible
+- chest visibility reduced
+- hindquarters extend SCREEN LOWER-RIGHT
+
+EAR FIX:
+
+TOTAL EAR COUNT = EXACTLY 2.
+
+There are only:
+
+1. near ear
+2. far ear
+
+Delete any:
+
+- third ear
+- duplicated far ear
+- duplicated near ear
+- extra triangular flap
+- extra pink spike
+- extra dark spike on top of skull
+
+The head silhouette has exactly TWO ear protrusions.
+
+TAIL:
+
+- one continuous flesh-pink rat tail
+- zero rings
+- zero black bands
+- zero stripes
+`;
+}
+
+async function generateFrontMaster() {
+  const cache = sourceAIPath(PATHS.masterFrontLeft);
+
+  if (!FORCE && (await exists(cache))) {
+    await normalizeChroma(cache, PATHS.masterFrontLeft);
+
+    const earQA = await validateMasterEarQA(PATHS.masterFrontLeft);
+
+    log(
+      "MASTER QA",
+
+      `front cached ears ${earAnalysisString(earQA.analysis)} ${
+        earQA.pass ? "PASS" : "REJECT"
+      }`,
+    );
+
+    if (earQA.pass) {
+      return;
+    }
+  }
+
+  for (let attempt = 0; attempt < CONFIG.master.maxAttempts; attempt++) {
+    let prompt = MASTER_FRONT_LEFT_PROMPT;
 
     if (attempt > 0) {
-      finalPrompt += `
+      prompt += `
 
-MASTER RETRY — TAIL QUALITY IS CRITICAL:
+MASTER FRONT RETRY ${attempt + 1}:
 
-The previous master was rejected because the tail may
-have acquired dark rings, stripes, bands or segmented coloration.
+The previous result failed anatomy QA.
 
-Render the SAME rat again.
+Create the SAME requested lower-left rat again.
 
-The complete tail must be one uninterrupted muted
-flesh-pink biological rat tail from pelvis to tip.
+CRITICAL EAR FIX:
 
-ZERO black rings.
+TOTAL EAR COUNT MUST EQUAL EXACTLY 2.
 
-ZERO gray rings.
+There is:
 
-ZERO dark bands.
+- one near ear
+- one far ear
 
-ZERO alternating segments.
+There is NO:
 
-ZERO raccoon-like markings.
+- third ear
+- duplicated ear
+- extra pink triangle
+- extra dark triangle
+- ear-like horn
+- ear-like fur spike
 
-Do not change:
+The head silhouette has exactly TWO ear protrusions.
 
-- rat identity
-- camera
-- proportions
-- fur colors
-- ears
-- eye
-- muzzle
+TAIL:
+
+- one continuous flesh-pink tail
+- zero rings
+- zero stripes
+- zero black bands
+
+Four connected limbs.
+Normal rat anatomy.
 `;
     }
 
     const buffer = await runNativeImageJob({
-      prompt: finalPrompt,
+      prompt,
 
-      seed: seed + attempt * 7919,
+      seed: SEEDS.masterFrontLeft + attempt * CONFIG.generation.retrySeedOffset,
 
-      reference,
-      output,
+      reference: null,
+
+      output: PATHS.masterFrontLeft,
     });
 
-    await saveGeneratedBuffer(buffer, output);
+    await saveGeneratedBuffer(buffer, PATHS.masterFrontLeft);
 
-    const qa = await logMasterQa(output);
+    const earQA = await validateMasterEarQA(PATHS.masterFrontLeft);
 
-    if (!qa.suspicious || attempt + 1 >= CONFIG.masterMaxAttempts) {
-      if (qa.suspicious) {
-        warn(
-          "MASTER QA",
+    log(
+      "MASTER QA",
 
-          `${path.basename(
-            output,
-          )} still looks suspicious to heuristic; keeping last result. Inspect master visually before animation.`,
-        );
-      }
+      `front attempt=${attempt + 1}/${CONFIG.master.maxAttempts} ears ${earAnalysisString(
+        earQA.analysis,
+      )} ${earQA.pass ? "PASS" : "REJECT"}`,
+    );
 
+    if (earQA.pass) {
       return;
     }
 
-    warn(
+    if (attempt + 1 < CONFIG.master.maxAttempts) {
+      warn(
+        "MASTER QA",
+
+        "front master ear QA failed; regenerating",
+      );
+    }
+  }
+
+  throw new Error("Could not generate valid front master without extra ears.");
+}
+
+async function generateBackMaster() {
+  const cache = sourceAIPath(PATHS.masterBackLeft);
+
+  if (!FORCE && (await exists(cache))) {
+    await normalizeChroma(cache, PATHS.masterBackLeft, {
+      appearanceReference: PATHS.masterFrontLeft,
+    });
+
+    const perspective = await calculateImageDifference(
+      PATHS.masterFrontLeft,
+      PATHS.masterBackLeft,
+    );
+
+    const earQA = await validateMasterEarQA(PATHS.masterBackLeft);
+
+    const perspectiveFail = backMasterTooSimilar(perspective);
+
+    log(
       "MASTER QA",
 
-      `${path.basename(
-        output,
-      )} retrying master because of possible tail banding`,
+      `back cached perspective ${differenceString(perspective)} ${
+        perspectiveFail ? "REJECT" : "PASS"
+      } | ears ${earAnalysisString(earQA.analysis)} ${
+        earQA.pass ? "PASS" : "REJECT"
+      }`,
     );
+
+    if (!perspectiveFail && earQA.pass) {
+      return;
+    }
   }
+
+  for (let attempt = 0; attempt < CONFIG.master.maxAttempts; attempt++) {
+    /*
+    |--------------------------------------------------------------------------
+    | Reference strategy
+    |--------------------------------------------------------------------------
+    |
+    | Попытки 0..referenceAttempts-1:
+    | используем front master как appearance reference.
+    |
+    | Последующие:
+    | reference=null, если Klein слишком сильно держится за front pose.
+    |--------------------------------------------------------------------------
+    */
+
+    const useReference = attempt < CONFIG.master.referenceAttempts;
+
+    const reference = useReference ? PATHS.masterFrontLeft : null;
+
+    const prompt = backMasterRetryPrompt(attempt, useReference);
+
+    const buffer = await runNativeImageJob({
+      prompt,
+
+      seed: SEEDS.masterBackLeft + attempt * CONFIG.generation.retrySeedOffset,
+
+      reference,
+
+      output: PATHS.masterBackLeft,
+    });
+
+    await saveGeneratedBuffer(buffer, PATHS.masterBackLeft, {
+      /*
+        | ВАЖНО:
+        |
+        | appearanceReference применяется ПОСЛЕ generation.
+        |
+        | Он только выравнивает цвета и не способен вернуть
+        | геометрию front-master.
+        */
+
+      appearanceReference: PATHS.masterFrontLeft,
+    });
+
+    const perspective = await calculateImageDifference(
+      PATHS.masterFrontLeft,
+      PATHS.masterBackLeft,
+    );
+
+    const earQA = await validateMasterEarQA(PATHS.masterBackLeft);
+
+    const perspectiveFail = backMasterTooSimilar(perspective);
+
+    const earFail = !earQA.pass;
+
+    log(
+      "MASTER QA",
+
+      `back attempt=${attempt + 1}/${CONFIG.master.maxAttempts} ref=${
+        reference ? "front-master" : "none"
+      } perspective ${differenceString(perspective)} ${
+        perspectiveFail ? "REJECT" : "PASS"
+      } | ears ${earAnalysisString(earQA.analysis)} ${
+        earFail ? "REJECT" : "PASS"
+      }`,
+    );
+
+    if (!perspectiveFail && !earFail) {
+      return;
+    }
+
+    if (attempt + 1 < CONFIG.master.maxAttempts) {
+      const reasons = [];
+
+      if (perspectiveFail) {
+        reasons.push("perspective");
+      }
+
+      if (earFail) {
+        reasons.push("ears");
+      }
+
+      const nextAttempt = attempt + 1;
+
+      const nextUsesReference = nextAttempt < CONFIG.master.referenceAttempts;
+
+      warn(
+        "MASTER QA",
+
+        `back master retry: ${reasons.join("+")}; next ref=${
+          nextUsesReference ? "front-master" : "none"
+        }`,
+      );
+    }
+  }
+
+  throw new Error(
+    "Could not generate valid northwest master: perspective/ear QA failed.",
+  );
 }
 
 async function generateMasters() {
-  await generateMasterWithTailGuard({
-    output: PATHS.masterFrontLeft,
+  await generateFrontMaster();
 
-    seed: SEEDS.masterFrontLeft,
-
-    prompt: MASTER_FRONT_LEFT_PROMPT,
-  });
-
-  await generateMasterWithTailGuard({
-    output: PATHS.masterBackLeft,
-
-    seed: SEEDS.masterBackLeft,
-
-    prompt: MASTER_BACK_LEFT_PROMPT,
-
-    reference: PATHS.masterFrontLeft,
-  });
+  await generateBackMaster();
 }
 
 async function ensureMasters() {
@@ -2953,6 +3786,12 @@ async function ensureMasters() {
   await generateMasters();
 }
 
+/*
+|--------------------------------------------------------------------------
+| WALK
+|--------------------------------------------------------------------------
+*/
+
 async function generateWalkDirection(direction, master, baseSeed, poses) {
   const frame0 = rawPath("walk", direction, 0);
 
@@ -2962,10 +3801,24 @@ async function generateWalkDirection(direction, master, baseSeed, poses) {
 
   const frame3 = rawPath("walk", direction, 3);
 
+  /*
+  |--------------------------------------------------------------------------
+  | CONTACT A
+  |--------------------------------------------------------------------------
+  */
+
   await generateMotionFrame({
     reference: master,
 
-    compareTo: master,
+    validations: [
+      {
+        path: master,
+
+        label: "vs-master",
+
+        thresholds: contactMotionThresholds(),
+      },
+    ],
 
     posePrompt: poses[0],
 
@@ -2974,14 +3827,30 @@ async function generateWalkDirection(direction, master, baseSeed, poses) {
     seed: phaseSeed(baseSeed, 0),
 
     output: frame0,
-
-    strongMotion: true,
   });
+
+  /*
+  |--------------------------------------------------------------------------
+  | CONTACT B
+  |--------------------------------------------------------------------------
+  |
+  | Генерируем от MASTER,
+  | но валидируем против Contact A.
+  |--------------------------------------------------------------------------
+  */
 
   await generateMotionFrame({
     reference: master,
 
-    compareTo: frame0,
+    validations: [
+      {
+        path: frame0,
+
+        label: "vs-contact-a",
+
+        thresholds: contactMotionThresholds(),
+      },
+    ],
 
     posePrompt: poses[2],
 
@@ -2990,14 +3859,45 @@ async function generateWalkDirection(direction, master, baseSeed, poses) {
     seed: phaseSeed(baseSeed, 2),
 
     output: frame2,
-
-    strongMotion: true,
   });
 
-  await generateMotionFrame({
-    reference: frame0,
+  /*
+  |--------------------------------------------------------------------------
+  | PASSING A
+  |--------------------------------------------------------------------------
+  |
+  | ВАЖНО:
+  |
+  | reference = MASTER
+  |
+  | НЕ frame0.
+  |
+  | Иначе diffusion слишком сильно держится за Contact A.
+  |
+  | Passing обязан отличаться И от Contact A, И от Contact B.
+  |--------------------------------------------------------------------------
+  */
 
-    compareTo: frame0,
+  await generateMotionFrame({
+    reference: master,
+
+    validations: [
+      {
+        path: frame0,
+
+        label: "vs-contact-a",
+
+        thresholds: walkPassingThresholds(),
+      },
+
+      {
+        path: frame2,
+
+        label: "vs-contact-b",
+
+        thresholds: walkPassingThresholds(),
+      },
+    ],
 
     posePrompt: poses[1],
 
@@ -3008,10 +3908,32 @@ async function generateWalkDirection(direction, master, baseSeed, poses) {
     output: frame1,
   });
 
-  await generateMotionFrame({
-    reference: frame2,
+  /*
+  |--------------------------------------------------------------------------
+  | PASSING B
+  |--------------------------------------------------------------------------
+  */
 
-    compareTo: frame2,
+  await generateMotionFrame({
+    reference: master,
+
+    validations: [
+      {
+        path: frame2,
+
+        label: "vs-contact-b",
+
+        thresholds: walkPassingThresholds(),
+      },
+
+      {
+        path: frame0,
+
+        label: "vs-contact-a",
+
+        thresholds: walkPassingThresholds(),
+      },
+    ],
 
     posePrompt: poses[3],
 
@@ -3021,6 +3943,40 @@ async function generateWalkDirection(direction, master, baseSeed, poses) {
 
     output: frame3,
   });
+
+  /*
+  |--------------------------------------------------------------------------
+  | FINAL WALK QA
+  |--------------------------------------------------------------------------
+  */
+
+  const scores = {
+    "0->1": await calculateImageDifference(frame0, frame1),
+
+    "1->2": await calculateImageDifference(frame1, frame2),
+
+    "2->3": await calculateImageDifference(frame2, frame3),
+
+    "3->0": await calculateImageDifference(frame3, frame0),
+
+    "0->2": await calculateImageDifference(frame0, frame2),
+
+    "1->3": await calculateImageDifference(frame1, frame3),
+  };
+
+  log(
+    "WALK QA",
+
+    `${direction}`,
+  );
+
+  for (const [pair, score] of Object.entries(scores)) {
+    log(
+      "WALK QA",
+
+      `${direction} ${pair} ${differenceString(score)}`,
+    );
+  }
 }
 
 async function generateWalk() {
@@ -3038,6 +3994,12 @@ async function generateWalk() {
     WALK_NW,
   );
 }
+
+/*
+|--------------------------------------------------------------------------
+| SEQUENTIAL ANIMATIONS
+|--------------------------------------------------------------------------
+*/
 
 async function generateSequentialAnimation({
   animation,
@@ -3057,7 +4019,17 @@ async function generateSequentialAnimation({
     await generateMotionFrame({
       reference: previous,
 
-      compareTo: previous,
+      validations: [
+        {
+          path: previous,
+
+          label: "vs-prev",
+
+          thresholds: strongFrames.includes(frame)
+            ? contactMotionThresholds()
+            : normalMotionThresholds(),
+        },
+      ],
 
       posePrompt: poses[frame],
 
@@ -3066,8 +4038,6 @@ async function generateSequentialAnimation({
       seed: phaseSeed(baseSeed, frame),
 
       output,
-
-      strongMotion: strongFrames.includes(frame),
 
       preserveBlood,
 
@@ -3079,6 +4049,12 @@ async function generateSequentialAnimation({
     previous = output;
   }
 }
+
+/*
+|--------------------------------------------------------------------------
+| ATTACK
+|--------------------------------------------------------------------------
+*/
 
 async function generateAttack() {
   await generateSequentialAnimation({
@@ -3110,8 +4086,14 @@ async function generateAttack() {
   });
 }
 
+/*
+|--------------------------------------------------------------------------
+| HIT
+|--------------------------------------------------------------------------
+*/
+
 function hitPose(variant, frame) {
-  const poses = HIT_VARIANT_PROMPTS[variant % HIT_VARIANT_PROMPTS.length];
+  const poses = HIT_VARIANTS[variant % HIT_VARIANTS.length];
 
   return (
     poses[frame] ??
@@ -3124,7 +4106,7 @@ Return toward stance but retain visible stagger.
 }
 
 async function generateHitReactions() {
-  for (let variant = 0; variant < CONFIG.hitVariants; variant++) {
+  for (let variant = 0; variant < CONFIG.animations.hitVariants; variant++) {
     for (const direction of CANONICAL_DIRECTIONS) {
       let previous = masterForDirection(direction);
 
@@ -3132,13 +4114,24 @@ async function generateHitReactions() {
         (direction === "southwest" ? SEEDS.hitSouthwest : SEEDS.hitNorthwest) +
         variant * 1009;
 
-      for (let frame = 0; frame < CONFIG.hitFrames; frame++) {
+      for (let frame = 0; frame < CONFIG.animations.hitFrames; frame++) {
         const output = rawPath("hit", direction, frame, variant);
 
         await generateMotionFrame({
           reference: previous,
 
-          compareTo: previous,
+          validations: [
+            {
+              path: previous,
+
+              label: "vs-prev",
+
+              thresholds:
+                frame < 2
+                  ? contactMotionThresholds()
+                  : normalMotionThresholds(),
+            },
+          ],
 
           posePrompt: hitPose(variant, frame),
 
@@ -3147,8 +4140,6 @@ async function generateHitReactions() {
           seed: phaseSeed(baseSeed, frame),
 
           output,
-
-          strongMotion: frame < 2,
 
           retryWeakPose: frame < 2,
         });
@@ -3159,6 +4150,12 @@ async function generateHitReactions() {
   }
 }
 
+/*
+|--------------------------------------------------------------------------
+| DEATH
+|--------------------------------------------------------------------------
+*/
+
 function deathPose(frame) {
   return (
     DEATH_PROMPTS[frame] ??
@@ -3167,7 +4164,7 @@ DEAD SETTLING FRAME ${frame}.
 
 Corpse settles slightly lower.
 
-Wounds and restrained blood remain consistent.
+Wounds and blood stay consistent.
 
 All limbs stay attached.
 `.trim()
@@ -3181,13 +4178,24 @@ async function generateDeath() {
     const baseSeed =
       direction === "southwest" ? SEEDS.deathSouthwest : SEEDS.deathNorthwest;
 
-    for (let frame = 0; frame < CONFIG.deathFrames; frame++) {
+    for (let frame = 0; frame < CONFIG.animations.deathFrames; frame++) {
       const output = rawPath("death", direction, frame);
 
       await generateMotionFrame({
         reference: previous,
 
-        compareTo: previous,
+        validations: [
+          {
+            path: previous,
+
+            label: "vs-prev",
+
+            thresholds:
+              frame > 0 && frame < Math.min(4, CONFIG.animations.deathFrames)
+                ? contactMotionThresholds()
+                : normalMotionThresholds(),
+          },
+        ],
 
         posePrompt: deathPose(frame),
 
@@ -3197,13 +4205,11 @@ async function generateDeath() {
 
         output,
 
-        strongMotion: frame > 0 && frame < Math.min(4, CONFIG.deathFrames),
-
         preserveBlood: true,
 
         keepHead: false,
 
-        retryWeakPose: frame < CONFIG.deathFrames - 1,
+        retryWeakPose: frame < CONFIG.animations.deathFrames - 1,
       });
 
       previous = output;
@@ -3211,8 +4217,14 @@ async function generateDeath() {
   }
 }
 
+/*
+|--------------------------------------------------------------------------
+| CORPSES
+|--------------------------------------------------------------------------
+*/
+
 async function generateCorpses() {
-  for (let variant = 0; variant < CONFIG.corpseVariants; variant++) {
+  for (let variant = 0; variant < CONFIG.animations.corpseVariants; variant++) {
     for (const direction of CANONICAL_DIRECTIONS) {
       const master = masterForDirection(direction);
 
@@ -3223,24 +4235,26 @@ async function generateCorpses() {
           ? SEEDS.corpseSouthwest
           : SEEDS.corpseNorthwest;
 
-      const corpsePrompt = animationPrompt(
+      const prompt = animationPrompt(
         `
 ${CORPSE_PROMPTS[variant % CORPSE_PROMPTS.length]}
 
 This is corpse variant ${variant}.
 
 Make pose, leg arrangement and tail curve
-clearly different from other corpse variants
-while keeping the exact same rat identity.
+clearly different from the other corpse variants.
 
-The tail must remain flesh-pink.
+Keep exact rat identity.
 
-The tail must NOT acquire:
+The rat still has exactly TWO ears.
 
-- dark rings
-- black bands
-- stripes
-- segmented coloration
+The tail remains a continuous flesh-pink rat tail.
+
+ZERO rings.
+
+ZERO black bands.
+
+ZERO stripes.
 `.trim(),
 
         direction,
@@ -3253,7 +4267,7 @@ The tail must NOT acquire:
       );
 
       await generateStill({
-        prompt: corpsePrompt,
+        prompt,
 
         seed: baseSeed + variant * 1009,
 
@@ -3261,7 +4275,7 @@ The tail must NOT acquire:
 
         reference: master,
 
-        direction,
+        appearanceReference: master,
 
         preserveBlood: true,
       });
@@ -3269,11 +4283,17 @@ The tail must NOT acquire:
   }
 }
 
+/*
+|--------------------------------------------------------------------------
+| PIXELIZATION
+|--------------------------------------------------------------------------
+*/
+
 async function transparentizeFullCanvas(inputPath) {
   if (!(await exists(inputPath))) {
-    const sourceAI = getSourceAIPath(inputPath);
+    const cache = sourceAIPath(inputPath);
 
-    if (!(await exists(sourceAI))) {
+    if (!(await exists(cache))) {
       throw new Error(`Missing source: ${inputPath}`);
     }
 
@@ -3283,7 +4303,7 @@ async function transparentizeFullCanvas(inputPath) {
     const preserveBlood =
       inputPath.includes("death") || inputPath.includes("corpse");
 
-    await normalizeChroma(sourceAI, inputPath, {
+    await normalizeChroma(cache, inputPath, {
       appearanceReference: direction ? masterForDirection(direction) : null,
 
       preserveBlood,
@@ -3328,7 +4348,8 @@ async function transparentizeFullCanvas(inputPath) {
 
 function hardenAlpha(buffer) {
   for (let offset = 0; offset < buffer.length; offset += 4) {
-    buffer[offset + 3] = buffer[offset + 3] >= CONFIG.alphaThreshold ? 255 : 0;
+    buffer[offset + 3] =
+      buffer[offset + 3] >= CONFIG.sprite.alphaThreshold ? 255 : 0;
   }
 
   return buffer;
@@ -3383,8 +4404,9 @@ async function rasterize(inputPath, yOffset = 0) {
     },
   )
     .resize(
-      CONFIG.spriteSize,
-      CONFIG.spriteSize,
+      CONFIG.sprite.size,
+
+      CONFIG.sprite.size,
 
       {
         fit: "fill",
@@ -3400,7 +4422,7 @@ async function rasterize(inputPath, yOffset = 0) {
 
   const hardened = hardenAlpha(Buffer.from(data));
 
-  return shiftRgbaCanvas(hardened, CONFIG.spriteSize, 0, yOffset);
+  return shiftRgbaCanvas(hardened, CONFIG.sprite.size, 0, yOffset);
 }
 
 function rgbKey(r, g, b) {
@@ -3617,9 +4639,9 @@ async function createPreview(input) {
 
   await sharp(input)
     .resize(
-      CONFIG.spriteSize * CONFIG.previewScale,
+      CONFIG.sprite.size * CONFIG.sprite.previewScale,
 
-      CONFIG.spriteSize * CONFIG.previewScale,
+      CONFIG.sprite.size * CONFIG.sprite.previewScale,
 
       {
         kernel: sharp.kernel.nearest,
@@ -3643,9 +4665,9 @@ async function writeSprite(buffer, output) {
 
     {
       raw: {
-        width: CONFIG.spriteSize,
+        width: CONFIG.sprite.size,
 
-        height: CONFIG.spriteSize,
+        height: CONFIG.sprite.size,
 
         channels: 4,
       },
@@ -3665,8 +4687,18 @@ async function mirrorSprite(input, output) {
   await createPreview(output);
 }
 
+/*
+|--------------------------------------------------------------------------
+| PIXEL SOURCES
+|--------------------------------------------------------------------------
+*/
+
 function getPixelSources(selection) {
   const sources = [];
+
+  /*
+  | IDLE
+  */
 
   for (const direction of CANONICAL_DIRECTIONS) {
     sources.push({
@@ -3682,15 +4714,19 @@ function getPixelSources(selection) {
 
       output: spritePath("idle", direction, 0),
 
-      paletteSeed: true,
-
       yOffset: 0,
     });
   }
 
+  /*
+  | WALK
+  */
+
   if (selection.walk) {
+    const bob = [1, 0, 1, 0];
+
     for (const direction of CANONICAL_DIRECTIONS) {
-      for (let frame = 0; frame < CONFIG.walkFrames; frame++) {
+      for (let frame = 0; frame < CONFIG.animations.walkFrames; frame++) {
         sources.push({
           animation: "walk",
 
@@ -3704,15 +4740,21 @@ function getPixelSources(selection) {
 
           output: spritePath("walk", direction, frame),
 
-          yOffset: [1, 0, 1, 0][frame],
+          yOffset: bob[frame] ?? 0,
         });
       }
     }
   }
 
+  /*
+  | ATTACK
+  */
+
   if (selection.attack) {
+    const bob = [0, 1, 0, -1, 0, 0];
+
     for (const direction of CANONICAL_DIRECTIONS) {
-      for (let frame = 0; frame < CONFIG.attackFrames; frame++) {
+      for (let frame = 0; frame < CONFIG.animations.attackFrames; frame++) {
         sources.push({
           animation: "attack",
 
@@ -3726,16 +4768,20 @@ function getPixelSources(selection) {
 
           output: spritePath("attack", direction, frame),
 
-          yOffset: [0, 1, 0, -1, 0, 0][frame],
+          yOffset: bob[frame] ?? 0,
         });
       }
     }
   }
 
+  /*
+  | HIT
+  */
+
   if (selection.hit) {
-    for (let variant = 0; variant < CONFIG.hitVariants; variant++) {
+    for (let variant = 0; variant < CONFIG.animations.hitVariants; variant++) {
       for (const direction of CANONICAL_DIRECTIONS) {
-        for (let frame = 0; frame < CONFIG.hitFrames; frame++) {
+        for (let frame = 0; frame < CONFIG.animations.hitFrames; frame++) {
           sources.push({
             animation: "hit",
 
@@ -3756,9 +4802,13 @@ function getPixelSources(selection) {
     }
   }
 
+  /*
+  | DEATH
+  */
+
   if (selection.death) {
     for (const direction of CANONICAL_DIRECTIONS) {
-      for (let frame = 0; frame < CONFIG.deathFrames; frame++) {
+      for (let frame = 0; frame < CONFIG.animations.deathFrames; frame++) {
         sources.push({
           animation: "death",
 
@@ -3772,16 +4822,22 @@ function getPixelSources(selection) {
 
           output: spritePath("death", direction, frame),
 
-          paletteSeed: frame === CONFIG.deathFrames - 1,
-
           yOffset: [0, 0, 1, 2, 2, 2, 2, 2][frame] ?? 2,
         });
       }
     }
   }
 
+  /*
+  | CORPSE
+  */
+
   if (selection.corpse) {
-    for (let variant = 0; variant < CONFIG.corpseVariants; variant++) {
+    for (
+      let variant = 0;
+      variant < CONFIG.animations.corpseVariants;
+      variant++
+    ) {
       for (const direction of CANONICAL_DIRECTIONS) {
         sources.push({
           animation: "corpse",
@@ -3796,8 +4852,6 @@ function getPixelSources(selection) {
 
           output: spritePath("corpse", direction, 0, variant),
 
-          paletteSeed: true,
-
           yOffset: 2,
         });
       }
@@ -3808,13 +4862,15 @@ function getPixelSources(selection) {
 }
 
 async function pixelizeSelection(selection) {
-  log("PIXEL", "START rasterize + palette");
+  log(
+    "PIXEL",
+
+    "START rasterize + palette",
+  );
 
   const sources = getPixelSources(selection);
 
   const rasters = new Map();
-
-  const paletteSeeds = [];
 
   for (const source of sources) {
     if (!(await exists(source.input))) {
@@ -3826,16 +4882,24 @@ async function pixelizeSelection(selection) {
     const key = `${source.animation}:${source.variant ?? -1}:${source.direction}:${source.frame}`;
 
     rasters.set(key, raster);
-
-    if (source.paletteSeed) {
-      paletteSeeds.push(raster);
-    }
   }
 
-  const palette = buildGlobalPalette(
-    paletteSeeds.length ? paletteSeeds : [...rasters.values()],
+  /*
+  |--------------------------------------------------------------------------
+  | GLOBAL PALETTE
+  |--------------------------------------------------------------------------
+  |
+  | Используем все текущие rasters.
+  |
+  | Это особенно важно для death/corpse,
+  | чтобы кровавые оттенки не пропали из palette.
+  |--------------------------------------------------------------------------
+  */
 
-    CONFIG.paletteSize,
+  const palette = buildGlobalPalette(
+    [...rasters.values()],
+
+    CONFIG.sprite.paletteSize,
   );
 
   await fs.writeFile(
@@ -3845,11 +4909,11 @@ async function pixelizeSelection(selection) {
       {
         size: palette.length,
 
-        generationSize: CONFIG.generationSize,
+        generationSize: CONFIG.generation.size,
 
-        spriteSize: CONFIG.spriteSize,
+        spriteSize: CONFIG.sprite.size,
 
-        chromaColor: CONFIG.chromaHex,
+        chromaColor: CONFIG.chroma.hex,
 
         colors: palette.map((color) => ({
           ...color,
@@ -3894,8 +4958,18 @@ async function pixelizeSelection(selection) {
     await mirrorSprite(source.output, mirrorOutput);
   }
 
-  log("PIXEL", `${sources.length * 2} sprite frames written`);
+  log(
+    "PIXEL",
+
+    `${sources.length * 2} sprite frames written`,
+  );
 }
+
+/*
+|--------------------------------------------------------------------------
+| SHEETS
+|--------------------------------------------------------------------------
+*/
 
 function buildRows(selection) {
   const rows = [];
@@ -3904,8 +4978,11 @@ function buildRows(selection) {
     for (const direction of DIRECTIONS) {
       rows.push({
         animation,
+
         variant,
+
         direction,
+
         frames,
 
         get: (frame) => spritePath(animation, direction, frame, variant),
@@ -3916,25 +4993,29 @@ function buildRows(selection) {
   add("idle", 1);
 
   if (selection.walk) {
-    add("walk", CONFIG.walkFrames);
+    add("walk", CONFIG.animations.walkFrames);
   }
 
   if (selection.attack) {
-    add("attack", CONFIG.attackFrames);
+    add("attack", CONFIG.animations.attackFrames);
   }
 
   if (selection.hit) {
-    for (let variant = 0; variant < CONFIG.hitVariants; variant++) {
-      add("hit", CONFIG.hitFrames, variant);
+    for (let variant = 0; variant < CONFIG.animations.hitVariants; variant++) {
+      add("hit", CONFIG.animations.hitFrames, variant);
     }
   }
 
   if (selection.death) {
-    add("death", CONFIG.deathFrames);
+    add("death", CONFIG.animations.deathFrames);
   }
 
   if (selection.corpse) {
-    for (let variant = 0; variant < CONFIG.corpseVariants; variant++) {
+    for (
+      let variant = 0;
+      variant < CONFIG.animations.corpseVariants;
+      variant++
+    ) {
       add("corpse", 1, variant);
     }
   }
@@ -3943,7 +5024,11 @@ function buildRows(selection) {
 }
 
 async function createSheet(output, rows) {
-  const cell = CONFIG.spriteSize;
+  if (!rows.length) {
+    return null;
+  }
+
+  const cell = CONFIG.sprite.size;
 
   const columns = Math.max(...rows.map((row) => row.frames));
 
@@ -3978,6 +5063,7 @@ async function createSheet(output, rows) {
   await sharp({
     create: {
       width,
+
       height,
 
       channels: 4,
@@ -3998,9 +5084,9 @@ async function createSheet(output, rows) {
 
   await sharp(output)
     .resize(
-      width * CONFIG.previewScale,
+      width * CONFIG.sprite.previewScale,
 
-      height * CONFIG.previewScale,
+      height * CONFIG.sprite.previewScale,
 
       {
         kernel: sharp.kernel.nearest,
@@ -4021,14 +5107,21 @@ async function createSheet(output, rows) {
     rows: rows.length,
 
     width,
+
     height,
   };
 }
 
+/*
+|--------------------------------------------------------------------------
+| MANIFEST
+|--------------------------------------------------------------------------
+*/
+
 async function createManifest(rows, sheetInfo) {
   const animations = {};
 
-  const cell = CONFIG.spriteSize;
+  const cell = CONFIG.sprite.size;
 
   rows.forEach((row, rowIndex) => {
     const animationName =
@@ -4121,7 +5214,7 @@ async function createManifest(rows, sheetInfo) {
   });
 
   const manifest = {
-    schemaVersion: 5,
+    schemaVersion: 8,
 
     assetType: "creature",
 
@@ -4135,22 +5228,24 @@ async function createManifest(rows, sheetInfo) {
       server: CONFIG.server,
 
       generation: {
-        width: CONFIG.generationSize,
+        width: CONFIG.generation.size,
 
-        height: CONFIG.generationSize,
+        height: CONFIG.generation.size,
 
-        steps: CONFIG.steps,
+        steps: CONFIG.generation.steps,
 
-        sampler: CONFIG.sampler,
+        sampler: CONFIG.generation.sampler,
 
-        cfg: CONFIG.cfg,
+        cfg: CONFIG.generation.cfg,
       },
 
-      chroma: CONFIG.chromaHex,
+      chroma: CONFIG.chroma.hex,
 
-      rasterMode: "fixed-canvas",
+      masterBackStrategy:
+        "front appearance ref first; perspective QA; ear QA; automatic no-ref fallback",
 
-      tailPolicy: "continuous flesh-pink; no rings/bands/stripes",
+      walkPassingStrategy:
+        "passing frames generated directly from master and validated against both contact poses",
     },
 
     frame: {
@@ -4166,10 +5261,14 @@ async function createManifest(rows, sheetInfo) {
     canonicalDirections: {
       southwest: {
         source: "ai",
+
+        facing: "screen-lower-left-front-side",
       },
 
       northwest: {
         source: "ai",
+
+        facing: "screen-upper-left-back-side",
       },
 
       southeast: {
@@ -4186,9 +5285,9 @@ async function createManifest(rows, sheetInfo) {
     },
 
     variants: {
-      hit: CONFIG.hitVariants,
+      hit: CONFIG.animations.hitVariants,
 
-      corpse: CONFIG.corpseVariants,
+      corpse: CONFIG.animations.corpseVariants,
     },
 
     walkCycle: {
@@ -4201,16 +5300,22 @@ async function createManifest(rows, sheetInfo) {
       3: "passing-b",
     },
 
-    tailPolicy: {
-      stripedTail: "forbidden",
+    anatomyPolicy: {
+      ears: "exactly two",
+
+      thirdEar: "forbidden",
+
+      extraEar: "forbidden",
+
+      detachedPaw: "forbidden",
+
+      duplicateLimb: "forbidden",
+
+      tail: "exactly one continuous flesh-pink tail",
 
       ringedTail: "forbidden",
 
-      segmentedTailColor: "forbidden",
-
-      duplicateTail: "forbidden",
-
-      expectedColor: "muted dirty flesh-pink",
+      stripedTail: "forbidden",
     },
 
     damagePolicy: {
@@ -4230,6 +5335,12 @@ async function createManifest(rows, sheetInfo) {
     JSON.stringify(manifest, null, 2),
   );
 }
+
+/*
+|--------------------------------------------------------------------------
+| BUILD SHEETS
+|--------------------------------------------------------------------------
+*/
 
 async function buildSheets(selection, full = false) {
   const rows = buildRows(selection);
@@ -4257,7 +5368,7 @@ async function buildSheets(selection, full = false) {
   }
 
   if (selection.hit) {
-    for (let variant = 0; variant < CONFIG.hitVariants; variant++) {
+    for (let variant = 0; variant < CONFIG.animations.hitVariants; variant++) {
       await createSheet(
         path.join(PATHS.sheets, `hit-${variant}-sheet.png`),
 
@@ -4269,7 +5380,11 @@ async function buildSheets(selection, full = false) {
   }
 
   if (selection.corpse) {
-    for (let variant = 0; variant < CONFIG.corpseVariants; variant++) {
+    for (
+      let variant = 0;
+      variant < CONFIG.animations.corpseVariants;
+      variant++
+    ) {
       await createSheet(
         path.join(PATHS.sheets, `corpse-${variant}-sheet.png`),
 
@@ -4290,6 +5405,12 @@ async function buildSheets(selection, full = false) {
     await createManifest(rows, sheetInfo);
   }
 }
+
+/*
+|--------------------------------------------------------------------------
+| SELECTIONS
+|--------------------------------------------------------------------------
+*/
 
 const SELECTIONS = {
   masters: {},
@@ -4316,19 +5437,32 @@ const SELECTIONS = {
 
   combat: {
     attack: true,
+
     hit: true,
+
     death: true,
+
     corpse: true,
   },
 
   all: {
     walk: true,
+
     attack: true,
+
     hit: true,
+
     death: true,
+
     corpse: true,
   },
 };
+
+/*
+|--------------------------------------------------------------------------
+| CONFIG LOG
+|--------------------------------------------------------------------------
+*/
 
 function printConfig(mode) {
   console.log("======================================");
@@ -4342,33 +5476,71 @@ function printConfig(mode) {
   console.log(`FORCE: ${FORCE}`);
 
   console.log(
-    `GENERATION: ${CONFIG.generationSize}x${CONFIG.generationSize} steps=${CONFIG.steps} sampler=${CONFIG.sampler} cfg=${CONFIG.cfg}`,
+    `GENERATION: ${CONFIG.generation.size}x${CONFIG.generation.size} steps=${CONFIG.generation.steps} sampler=${CONFIG.generation.sampler} cfg=${CONFIG.generation.cfg}`,
   );
 
   console.log(
-    `SPRITE: ${CONFIG.spriteSize}x${CONFIG.spriteSize} palette=${CONFIG.paletteSize} preview=x${CONFIG.previewScale}`,
+    `SPRITE: ${CONFIG.sprite.size}x${CONFIG.sprite.size} palette=${CONFIG.sprite.paletteSize} preview=x${CONFIG.sprite.previewScale}`,
   );
 
   console.log(
-    `MOTION: retry=${CONFIG.motion.retryWeakPose} attempts=${CONFIG.motion.maxAttempts} normal=${CONFIG.motion.minMeanDifference}/${(
-      CONFIG.motion.minChangedFraction * 100
-    ).toFixed(1)}%/sil${(CONFIG.motion.minSilhouetteFraction * 100).toFixed(
+    `MASTER: attempts=${CONFIG.master.maxAttempts} refAttempts=${CONFIG.master.referenceAttempts}`,
+  );
+
+  console.log(
+    `MASTER PERSPECTIVE QA: mean>=${CONFIG.master.perspectiveMinMean} changed>=${(
+      CONFIG.master.perspectiveMinChanged * 100
+    ).toFixed(1)}% silhouette>=${(
+      CONFIG.master.perspectiveMinSilhouette * 100
+    ).toFixed(1)}%`,
+  );
+
+  console.log(
+    `MASTER EAR QA: enabled=${CONFIG.master.earQAEnabled} maxComponents=${CONFIG.master.maxEarComponents} minPixels=${CONFIG.master.minEarComponentPixels}`,
+  );
+
+  console.log(
+    `MOTION NORMAL: mean>=${CONFIG.motion.minMean} changed>=${(
+      CONFIG.motion.minChanged * 100
+    ).toFixed(1)}% silhouette>=${(CONFIG.motion.minSilhouette * 100).toFixed(
       1,
     )}%`,
   );
 
   console.log(
-    `MASTER: attempts=${CONFIG.masterMaxAttempts} tail-guard=prompt+heuristic`,
+    `MOTION CONTACT: mean>=${CONFIG.motion.contactMean} changed>=${(
+      CONFIG.motion.contactChanged * 100
+    ).toFixed(1)}% silhouette>=${(
+      CONFIG.motion.contactSilhouette * 100
+    ).toFixed(1)}%`,
   );
 
   console.log(
-    `HIT: ${CONFIG.hitVariants}x${CONFIG.hitFrames} | DEATH: ${CONFIG.deathFrames} | CORPSES: ${CONFIG.corpseVariants}`,
+    `WALK PASSING: mean>=${CONFIG.motion.walkPassingMean} changed>=${(
+      CONFIG.motion.walkPassingChanged * 100
+    ).toFixed(1)}% silhouette>=${(
+      CONFIG.motion.walkPassingSilhouette * 100
+    ).toFixed(1)}%`,
   );
 
-  console.log(`CHROMA: ${CONFIG.chromaHex}`);
+  console.log(
+    `MOTION RETRY: ${CONFIG.motion.retryWeakPose} attempts=${CONFIG.motion.maxAttempts}`,
+  );
+
+  console.log(
+    `HIT: ${CONFIG.animations.hitVariants}x${CONFIG.animations.hitFrames} | DEATH: ${CONFIG.animations.deathFrames} | CORPSES: ${CONFIG.animations.corpseVariants}`,
+  );
+
+  console.log(`CHROMA: ${CONFIG.chroma.hex}`);
 
   console.log("API: sdcpp native async jobs");
 }
+
+/*
+|--------------------------------------------------------------------------
+| MAIN
+|--------------------------------------------------------------------------
+*/
 
 async function main() {
   const mode = (process.argv[2] ?? "all").toLowerCase();
@@ -4394,6 +5566,12 @@ async function main() {
 
   printConfig(mode);
 
+  /*
+  |--------------------------------------------------------------------------
+  | PIXELIZE
+  |--------------------------------------------------------------------------
+  */
+
   if (mode === "pixelize") {
     await stage(
       "pixelize all",
@@ -4412,6 +5590,12 @@ async function main() {
     return;
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | SHEET
+  |--------------------------------------------------------------------------
+  */
+
   if (mode === "sheet") {
     await stage(
       "build sheets + manifest",
@@ -4424,7 +5608,19 @@ async function main() {
     return;
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | SERVER
+  |--------------------------------------------------------------------------
+  */
+
   await stage("server check", checkServer);
+
+  /*
+  |--------------------------------------------------------------------------
+  | MASTERS
+  |--------------------------------------------------------------------------
+  */
 
   if (mode === "masters") {
     await stage("generate masters", generateMasters);
@@ -4446,11 +5642,23 @@ async function main() {
     return;
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | ENSURE MASTERS
+  |--------------------------------------------------------------------------
+  */
+
   if (mode === "all") {
     await stage("generate masters", generateMasters);
   } else {
     await stage("ensure masters", ensureMasters);
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | WALK
+  |--------------------------------------------------------------------------
+  */
 
   if (mode === "walk") {
     await stage("generate walk", generateWalk);
@@ -4472,6 +5680,12 @@ async function main() {
     return;
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | ATTACK
+  |--------------------------------------------------------------------------
+  */
+
   if (mode === "attack") {
     await stage("generate attack", generateAttack);
 
@@ -4491,6 +5705,12 @@ async function main() {
 
     return;
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | HIT
+  |--------------------------------------------------------------------------
+  */
 
   if (mode === "hit") {
     await stage("generate hit reactions", generateHitReactions);
@@ -4512,6 +5732,12 @@ async function main() {
     return;
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | DEATH
+  |--------------------------------------------------------------------------
+  */
+
   if (mode === "death") {
     await stage("generate death", generateDeath);
 
@@ -4532,6 +5758,12 @@ async function main() {
     return;
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | CORPSES
+  |--------------------------------------------------------------------------
+  */
+
   if (mode === "corpses") {
     await stage("generate corpses", generateCorpses);
 
@@ -4551,6 +5783,12 @@ async function main() {
 
     return;
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | COMBAT
+  |--------------------------------------------------------------------------
+  */
 
   if (mode === "combat") {
     await stage("generate attack", generateAttack);
@@ -4577,6 +5815,12 @@ async function main() {
 
     return;
   }
+
+  /*
+  |--------------------------------------------------------------------------
+  | ALL
+  |--------------------------------------------------------------------------
+  */
 
   await stage("generate walk", generateWalk);
 
