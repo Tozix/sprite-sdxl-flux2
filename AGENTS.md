@@ -19,7 +19,5 @@
 | Tests (file-scoped) | `node --test sprite-pipeline-isometric.test.mjs` |
 
 ## Commit Attribution
-AI commits MUST include:
-```text
-Co-Authored-By: GPT-5.3-codex-spark <noreply@opencode.ai>
-```
+- Author all commits as the user only.
+- Do not include any `Co-Authored-By` footer in commits.
