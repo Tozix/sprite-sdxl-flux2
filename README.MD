@@ -2603,58 +2603,33 @@ scale
 
 ---
 
-# 75. Current CLI modes in sprite-pipeline
+# 75. Current CLI entrypoint
 
-Current mob pipeline supports:
-
-```bash
-node sprite-pipeline.mjs masters
-```
-
-Creates/validates canonical masters.
+Use the Bun + TypeScript pipeline front-end:
 
 ```bash
-node sprite-pipeline.mjs animate
+bun run pipeline.ts <sprite|isometric> <template> <mode> [--force]
 ```
 
-Generates animation RAW frames, pixelizes and creates sheets.
+- `template` is a prompt file under `templates/<pipeline>/*` or a path to an override JSON.
+- The CLI forwards the resolved template path as `--template <path>` to the legacy runner.
+- `--force` bypasses generated-frame caches.
+
+Examples:
 
 ```bash
-node sprite-pipeline.mjs pixelize
+bun run pipeline.ts sprite base masters
+bun run pipeline.ts sprite base animate
+bun run pipeline.ts sprite base all --force
+
+bun run pipeline.ts isometric base walk
+bun run pipeline.ts isometric base combat --force
 ```
 
-Does not use AI.
+Legacy modes remain provided by the existing script implementation for now.
 
-Re-processes existing RAW frames.
-
-Use this to tune:
-
-```text
-spriteSize
-paletteSize
-background removal
-pixel processing
-```
-
-without GPU generation.
-
-```bash
-node sprite-pipeline.mjs sheet
-```
-
-Only rebuilds sheets/manifests.
-
-```bash
-node sprite-pipeline.mjs all
-```
-
-Runs the complete pipeline.
-
-Force regeneration:
-
-```bash
-node sprite-pipeline.mjs all --force
-```
+- Sprite supports `masters`, `animate`, `pixelize`, `sheet`, `all`.
+- Isometric supports `masters`, `walk`, `attack`, `hit`, `death`, `corpses`, `combat`, `all`, `pixelize`, `sheet`.
 
 ---
 

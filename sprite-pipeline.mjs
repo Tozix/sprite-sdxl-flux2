@@ -124,7 +124,107 @@ const CONFIG = {
   },
 };
 
-const FORCE = process.argv.includes("--force");
+const CLI_ARGS = process.argv.slice(2);
+
+const FORCE = CLI_ARGS.includes("--force");
+
+function parseTemplateArg(argv = CLI_ARGS) {
+  const index = argv.indexOf("--template");
+
+  if (index === -1) {
+    return null;
+  }
+
+  if (index === argv.length - 1) {
+    throw new Error("Missing path after --template");
+  }
+
+  const templatePath = argv[index + 1];
+
+  if (!templatePath || templatePath.startsWith("--")) {
+    throw new Error("Invalid --template value");
+  }
+
+  return templatePath;
+}
+
+function parseModeArg(argv = CLI_ARGS) {
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+
+    if (arg === "--template") {
+      i += 1;
+
+      continue;
+    }
+
+    if (arg === "--force" || arg.startsWith("--")) {
+      continue;
+    }
+
+    return arg.toLowerCase();
+  }
+
+  return "all";
+}
+
+function isString(value) {
+  return typeof value === "string";
+}
+
+function isArrayOfString(value) {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+async function loadTemplate(pathname) {
+  if (!pathname) {
+    return null;
+  }
+
+  const raw = await fs.readFile(pathname, "utf8");
+
+  const template = JSON.parse(raw);
+
+  if (template === null || typeof template !== "object") {
+    throw new Error(`Invalid template JSON: ${pathname}`);
+  }
+
+  return template;
+}
+
+function applyTemplateConfig(template = {}) {
+  if (!template || typeof template !== "object") {
+    return;
+  }
+
+  if (isString(template.GLOBAL_ART_RULES)) {
+    GLOBAL_ART_RULES = template.GLOBAL_ART_RULES;
+  }
+
+  if (isString(template.MASTER_SIDE_PROMPT)) {
+    MASTER_SIDE_PROMPT = template.MASTER_SIDE_PROMPT;
+  }
+
+  if (isString(template.MASTER_UP_PROMPT)) {
+    MASTER_UP_PROMPT = template.MASTER_UP_PROMPT;
+  }
+
+  if (isArrayOfString(template.WALK_SIDE)) {
+    WALK_SIDE = template.WALK_SIDE.map((text) => text.trim());
+  }
+
+  if (isArrayOfString(template.WALK_UP)) {
+    WALK_UP = template.WALK_UP.map((text) => text.trim());
+  }
+
+  if (isArrayOfString(template.ATTACK_SIDE)) {
+    ATTACK_SIDE = template.ATTACK_SIDE.map((text) => text.trim());
+  }
+
+  if (isArrayOfString(template.ATTACK_UP)) {
+    ATTACK_UP = template.ATTACK_UP.map((text) => text.trim());
+  }
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -158,7 +258,7 @@ const PATHS = {
 |--------------------------------------------------------------------------
 */
 
-const GLOBAL_ART_RULES = `
+let GLOBAL_ART_RULES = `
 ABSOLUTE OUTPUT RULES:
 
 The image must contain ONLY the rat and a perfectly uniform flat background.
@@ -213,7 +313,7 @@ chroma-style background that will later be removed automatically.
 |--------------------------------------------------------------------------
 */
 
-const MASTER_SIDE_PROMPT = `
+let MASTER_SIDE_PROMPT = `
 Create one single 2D RPG enemy creature asset.
 
 The creature is a fantasy sewer rat.
@@ -304,7 +404,7 @@ This is a canonical character master that will be used to create
 multiple animation frames while preserving identity.
 `.trim();
 
-const MASTER_UP_PROMPT = `
+let MASTER_UP_PROMPT = `
 Use the reference image as the EXACT SAME RAT.
 
 Preserve EXACTLY:
@@ -389,7 +489,7 @@ Do not redesign the character.
 |--------------------------------------------------------------------------
 */
 
-const WALK_SIDE = [
+let WALK_SIDE = [
   `
 WALK FRAME 1 — CONTACT A.
 
@@ -463,7 +563,7 @@ Clearly different from all other walk frames.
 |--------------------------------------------------------------------------
 */
 
-const WALK_UP = [
+let WALK_UP = [
   `
 WALK FRAME 1 — CONTACT A.
 
@@ -545,7 +645,7 @@ Clearly different from all other walk frames.
 |--------------------------------------------------------------------------
 */
 
-const ATTACK_SIDE = [
+let ATTACK_SIDE = [
   `
 ATTACK FRAME 1 OF 6 — ANTICIPATION.
 
@@ -655,7 +755,7 @@ Keep a subtle recovery pose instead of copying idle exactly.
 |--------------------------------------------------------------------------
 */
 
-const ATTACK_UP = [
+let ATTACK_UP = [
   `
 ATTACK FRAME 1 OF 6 — ANTICIPATION.
 
@@ -2928,7 +3028,13 @@ async function createManifest(rows) {
 */
 
 async function main() {
-  const mode = (process.argv[2] ?? "all").toLowerCase();
+  const mode = parseModeArg();
+
+  const templatePath = parseTemplateArg();
+
+  const template = await loadTemplate(templatePath);
+
+  applyTemplateConfig(template);
 
   const modes = ["masters", "animate", "pixelize", "sheet", "all"];
 
@@ -2940,7 +3046,9 @@ node sprite-pipeline.mjs masters
 node sprite-pipeline.mjs animate
 node sprite-pipeline.mjs pixelize
 node sprite-pipeline.mjs sheet
-node sprite-pipeline.mjs all
+  node sprite-pipeline.mjs all
+
+node sprite-pipeline.mjs <mode> --template templates/sprite/base.json
 
 Force AI regeneration:
 

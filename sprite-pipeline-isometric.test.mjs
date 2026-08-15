@@ -40,6 +40,10 @@ test("reuses an anatomy-clean cached frame even when motion is below threshold",
     exists: async () => true,
     differenceString: (score) =>
       `mean=${score.meanDifference} changed=${score.changedFraction} silhouette=${score.silhouetteFraction}`,
+    validationResultsString: (score) =>
+      score
+        ? `mean=${score.meanDifference} changed=${score.changedFraction} silhouette=${score.silhouetteFraction}`
+        : "mean=0 changed=0 silhouette=0",
     normalizeChroma: async () => ({ mattePixels: 0, color: null }),
     calculateForegroundGeometry: async () => ({ width: 10, height: 10, area: 100 }),
     isSizeStable: () => ({ ok: true }),
@@ -52,6 +56,9 @@ test("reuses an anatomy-clean cached frame even when motion is below threshold",
       silhouetteFraction: 0.05,
     }),
     motionTooSmall: () => true,
+    validateFrameDifferences: () => ({
+      ok: true,
+    }),
     animationPrompt: () => "prompt",
     masterForDirection: () => "master.png",
     runNativeImageJob: async () => {
@@ -98,6 +105,10 @@ test("uses anatomy-clean frame when motion retries are exhausted", async () => {
     normalizeChroma: async () => ({ mattePixels: 0, color: null }),
     differenceString: (score) =>
       `mean=${score.meanDifference} changed=${score.changedFraction} silhouette=${score.silhouetteFraction}`,
+    validationResultsString: (score) =>
+      score
+        ? `mean=${score.meanDifference} changed=${score.changedFraction} silhouette=${score.silhouetteFraction}`
+        : "mean=0 changed=0 silhouette=0",
     calculateForegroundGeometry: async () => ({ width: 10, height: 10, area: 100 }),
     isSizeStable: () => ({ ok: true }),
     validateAnatomyArtifacts: async () => ({ ok: true }),
@@ -109,6 +120,9 @@ test("uses anatomy-clean frame when motion retries are exhausted", async () => {
       silhouetteFraction: 0,
     }),
     motionTooSmall: () => true,
+    validateFrameDifferences: () => ({
+      ok: true,
+    }),
     animationPrompt: () => "prompt",
     masterForDirection: () => "master.png",
     runNativeImageJob: async () => {
@@ -174,6 +188,10 @@ test("reuses cached motion frame regardless of drift checks", async () => {
     calculateForegroundGeometry: async () => ({ width: 10, height: 10, area: 100 }),
     isSizeStable: () => ({ ok: false, reason: "size drift" }),
     validateAnatomyArtifacts: async () => ({ ok: true }),
+    validationResultsString: (score) =>
+      score
+        ? `mean=${score.meanDifference} changed=${score.changedFraction} silhouette=${score.silhouetteFraction}`
+        : "mean=0 changed=0 silhouette=0",
     calculateImageDifference: async () => ({
       meanDifference: 10,
 
@@ -184,6 +202,9 @@ test("reuses cached motion frame regardless of drift checks", async () => {
     differenceString: (score) =>
       `mean=${score.meanDifference} changed=${score.changedFraction} silhouette=${score.silhouetteFraction}`,
     motionTooSmall: () => false,
+    validateFrameDifferences: () => ({
+      ok: true,
+    }),
     animationPrompt: () => "prompt",
     masterForDirection: () => "master.png",
     runNativeImageJob: async () => {

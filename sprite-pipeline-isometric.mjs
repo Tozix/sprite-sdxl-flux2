@@ -356,6 +356,189 @@ const CONFIG = {
 
 const FORCE = process.argv.includes("--force");
 
+const CLI_ARGS = process.argv.slice(2);
+
+function parseTemplateArg(argv = CLI_ARGS) {
+  const index = argv.indexOf("--template");
+
+  if (index === -1) {
+    return null;
+  }
+
+  if (index === argv.length - 1) {
+    throw new Error("Missing path after --template");
+  }
+
+  const templatePath = argv[index + 1];
+
+  if (!templatePath || templatePath.startsWith("--")) {
+    throw new Error("Invalid --template value");
+  }
+
+  return templatePath;
+}
+
+function parseModeArg(argv = CLI_ARGS) {
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+
+    if (arg === "--template") {
+      i += 1;
+
+      continue;
+    }
+
+    if (arg === "--force" || arg.startsWith("--")) {
+      continue;
+    }
+
+    return arg.toLowerCase();
+  }
+
+  return "all";
+}
+
+function isString(value) {
+  return typeof value === "string";
+}
+
+function isArrayOfString(value) {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isArrayOfStringArray(value) {
+  return (
+    Array.isArray(value) &&
+    value.every((item) => Array.isArray(item) && item.every(isString))
+  );
+}
+
+function cloneArrayOfStrings(values) {
+  return values.map((value) => value.trim());
+}
+
+async function loadTemplate(pathname) {
+  if (!pathname) {
+    return null;
+  }
+
+  const raw = await fs.readFile(pathname, "utf8");
+
+  const template = JSON.parse(raw);
+
+  if (template === null || typeof template !== "object") {
+    throw new Error(`Invalid template JSON: ${pathname}`);
+  }
+
+  return template;
+}
+
+function applyTemplateConfig(template = {}) {
+  if (!template || typeof template !== "object") {
+    return;
+  }
+
+  if (isArrayOfString(template.DIRECTIONS) && template.DIRECTIONS.length === 4) {
+    DIRECTIONS = template.DIRECTIONS;
+  }
+
+  if (Array.isArray(template.CANONICAL_DIRECTIONS) && template.CANONICAL_DIRECTIONS.length) {
+    CANONICAL_DIRECTIONS = template.CANONICAL_DIRECTIONS;
+  }
+
+  if (template.MIRROR_DIRECTION && typeof template.MIRROR_DIRECTION === "object") {
+    MIRROR_DIRECTION = {
+      ...MIRROR_DIRECTION,
+      ...template.MIRROR_DIRECTION,
+    };
+  }
+
+  if (template.SEEDS && typeof template.SEEDS === "object") {
+    SEEDS = {
+      ...SEEDS,
+      ...template.SEEDS,
+    };
+  }
+
+  if (isString(template.ISOMETRIC_CAMERA)) {
+    ISOMETRIC_CAMERA = template.ISOMETRIC_CAMERA;
+  }
+
+  if (isString(template.CHROMA_BACKGROUND)) {
+    CHROMA_BACKGROUND = template.CHROMA_BACKGROUND;
+  }
+
+  if (isString(template.NO_SYMBOLS)) {
+    NO_SYMBOLS = template.NO_SYMBOLS;
+  }
+
+  if (isString(template.RAT_STYLE)) {
+    RAT_STYLE = template.RAT_STYLE;
+  }
+
+  if (isString(template.TAIL_INTEGRITY)) {
+    TAIL_INTEGRITY = template.TAIL_INTEGRITY;
+  }
+
+  if (isString(template.EAR_INTEGRITY)) {
+    EAR_INTEGRITY = template.EAR_INTEGRITY;
+  }
+
+  if (isString(template.ANATOMY_INTEGRITY)) {
+    ANATOMY_INTEGRITY = template.ANATOMY_INTEGRITY;
+  }
+
+  if (isString(template.ART_STYLE)) {
+    ART_STYLE = template.ART_STYLE;
+  }
+
+  if (isString(template.IDENTITY_LOCK)) {
+    IDENTITY_LOCK = template.IDENTITY_LOCK;
+  }
+
+  if (isString(template.COLOR_LOCK_PROMPT)) {
+    COLOR_LOCK_PROMPT = template.COLOR_LOCK_PROMPT;
+  }
+
+  if (isString(template.MASTER_FRONT_LEFT_PROMPT)) {
+    MASTER_FRONT_LEFT_PROMPT = template.MASTER_FRONT_LEFT_PROMPT;
+  }
+
+  if (isString(template.MASTER_BACK_LEFT_PROMPT)) {
+    MASTER_BACK_LEFT_PROMPT = template.MASTER_BACK_LEFT_PROMPT;
+  }
+
+  if (isArrayOfString(template.WALK_SW)) {
+    WALK_SW = cloneArrayOfStrings(template.WALK_SW);
+    WALK_NW = WALK_SW.map((text) =>
+      text
+        .replaceAll("SCREEN LOWER-LEFT", "SCREEN UPPER-LEFT")
+        .replaceAll("SCREEN UPPER-RIGHT", "SCREEN LOWER-RIGHT"),
+    );
+  }
+
+  if (isArrayOfString(template.ATTACK_SW)) {
+    ATTACK_SW = cloneArrayOfStrings(template.ATTACK_SW);
+    ATTACK_NW = ATTACK_SW.map((text) =>
+      text.replaceAll("SCREEN LOWER-LEFT", "SCREEN UPPER-LEFT"),
+    );
+  }
+
+  if (isArrayOfStringArray(template.HIT_VARIANTS)) {
+    HIT_VARIANTS = template.HIT_VARIANTS.map((variantSet) =>
+      variantSet.map((value) => value.trim()),
+    );
+  }
+
+  if (isArrayOfString(template.DEATH_PROMPTS)) {
+    DEATH_PROMPTS = cloneArrayOfStrings(template.DEATH_PROMPTS);
+  }
+
+  if (isArrayOfString(template.CORPSE_PROMPTS)) {
+    CORPSE_PROMPTS = cloneArrayOfStrings(template.CORPSE_PROMPTS);
+  }
+}
+
 if (CONFIG.appearance.minStdScale > CONFIG.appearance.maxStdScale) {
   throw new Error(
     "IRON_ARCANA_APPEARANCE_MIN_STD_SCALE must be <= IRON_ARCANA_APPEARANCE_MAX_STD_SCALE",
@@ -368,16 +551,16 @@ if (CONFIG.appearance.minStdScale > CONFIG.appearance.maxStdScale) {
 |--------------------------------------------------------------------------
 */
 
-const DIRECTIONS = ["southwest", "southeast", "northeast", "northwest"];
+let DIRECTIONS = ["southwest", "southeast", "northeast", "northwest"];
 
-const CANONICAL_DIRECTIONS = ["southwest", "northwest"];
+let CANONICAL_DIRECTIONS = ["southwest", "northwest"];
 
-const MIRROR_DIRECTION = {
+let MIRROR_DIRECTION = {
   southwest: "southeast",
   northwest: "northeast",
 };
 
-const SEEDS = {
+let SEEDS = {
   masterFrontLeft: 101,
   masterBackLeft: 202,
 
@@ -675,7 +858,7 @@ async function prepareDirectories() {
 |--------------------------------------------------------------------------
 */
 
-const ISOMETRIC_CAMERA = `
+let ISOMETRIC_CAMERA = `
 CAMERA AND PROJECTION:
 
 Use one fixed classic three-quarter isometric game camera.
@@ -704,7 +887,7 @@ This is NOT:
 - cinematic perspective
 `.trim();
 
-const CHROMA_BACKGROUND = `
+let CHROMA_BACKGROUND = `
 CRITICAL BACKGROUND REQUIREMENT:
 
 Use one completely uniform chroma-key matte background.
@@ -736,7 +919,7 @@ Forbidden outside the intended subject silhouette:
 Do not cast chroma-colored rim light onto the subject.
 `.trim();
 
-const NO_SYMBOLS = `
+let NO_SYMBOLS = `
 Do not render:
 
 - arrows
@@ -753,7 +936,7 @@ Do not render:
 - motion lines
 `.trim();
 
-const RAT_STYLE = `
+let RAT_STYLE = `
 CHARACTER:
 
 A hostile sewer rat enemy from a grim dark medieval fantasy MMORPG.
@@ -828,7 +1011,7 @@ Do not make the rat:
 - mutated
 `.trim();
 
-const TAIL_INTEGRITY = `
+let TAIL_INTEGRITY = `
 TAIL INTEGRITY — HARD REQUIREMENT:
 
 The rat has exactly ONE normal biological rat tail.
@@ -863,7 +1046,7 @@ The base may be slightly darker pink than the tip,
 but there must be NO repeated banding or rings.
 `.trim();
 
-const EAR_INTEGRITY = `
+let EAR_INTEGRITY = `
 EAR ANATOMY — ABSOLUTE HARD REQUIREMENT:
 
 THE RAT HAS EXACTLY TWO EARS TOTAL.
@@ -918,7 +1101,7 @@ NOT 4.
 EXACTLY 2.
 `.trim();
 
-const ANATOMY_INTEGRITY = `
+let ANATOMY_INTEGRITY = `
 ANATOMY INTEGRITY — HARD REQUIREMENT:
 
 The rat has exactly four anatomical limbs.
@@ -939,7 +1122,7 @@ STRICTLY FORBIDDEN:
 - residual old limb fragment
 `.trim();
 
-const ART_STYLE = `
+let ART_STYLE = `
 ART STYLE:
 
 - grim dark-fantasy RPG game asset
@@ -962,7 +1145,7 @@ DO NOT USE:
 - cinematic lighting
 `.trim();
 
-const IDENTITY_LOCK = `
+let IDENTITY_LOCK = `
 REFERENCE IS THE CANONICAL CHARACTER APPEARANCE.
 
 Preserve:
@@ -991,7 +1174,7 @@ IGNORE the reference pose
 and obey the requested pose/facing.
 `.trim();
 
-const COLOR_LOCK_PROMPT = `
+let COLOR_LOCK_PROMPT = `
 COLOR / LIGHTING LOCK — HARD REQUIREMENT:
 
 The reference image is the color authority.
@@ -1016,7 +1199,7 @@ in every animation frame.
 |--------------------------------------------------------------------------
 */
 
-const MASTER_FRONT_LEFT_PROMPT = `
+let MASTER_FRONT_LEFT_PROMPT = `
 Create one isolated fantasy sewer rat enemy.
 
 ${ISOMETRIC_CAMERA}
@@ -1083,7 +1266,7 @@ ${CHROMA_BACKGROUND}
 |--------------------------------------------------------------------------
 */
 
-const MASTER_BACK_LEFT_PROMPT = `
+let MASTER_BACK_LEFT_PROMPT = `
 Use the reference image ONLY as the appearance and character reference
 for the SAME RAT.
 
@@ -1197,7 +1380,7 @@ ${CHROMA_BACKGROUND}
 |--------------------------------------------------------------------------
 */
 
-const WALK_SW = [
+let WALK_SW = [
   `
 WALK CONTACT A — STRONG READABLE STRIDE.
 
@@ -1353,7 +1536,7 @@ Do NOT merely move toes.
 `.trim(),
 ];
 
-const WALK_NW = WALK_SW.map((text) =>
+let WALK_NW = WALK_SW.map((text) =>
   text
     .replaceAll("SCREEN LOWER-LEFT", "SCREEN UPPER-LEFT")
     .replaceAll("SCREEN UPPER-RIGHT", "SCREEN LOWER-RIGHT"),
@@ -1365,7 +1548,7 @@ const WALK_NW = WALK_SW.map((text) =>
 |--------------------------------------------------------------------------
 */
 
-const ATTACK_SW = [
+let ATTACK_SW = [
   `
 ATTACK ANTICIPATION.
 
@@ -1449,7 +1632,7 @@ Tail settles.
 `.trim(),
 ];
 
-const ATTACK_NW = ATTACK_SW.map((text) =>
+let ATTACK_NW = ATTACK_SW.map((text) =>
   text.replaceAll("SCREEN LOWER-LEFT", "SCREEN UPPER-LEFT"),
 );
 
@@ -1459,7 +1642,7 @@ const ATTACK_NW = ATTACK_SW.map((text) =>
 |--------------------------------------------------------------------------
 */
 
-const HIT_VARIANTS = [
+let HIT_VARIANTS = [
   [
     `
 DAMAGE REACTION A — IMPACT.
@@ -1567,7 +1750,7 @@ Keep residual stagger.
 |--------------------------------------------------------------------------
 */
 
-const DEATH_PROMPTS = [
+let DEATH_PROMPTS = [
   `
 DEATH FRAME 0 — FATAL IMPACT.
 
@@ -1657,7 +1840,7 @@ No exposed organs.
 |--------------------------------------------------------------------------
 */
 
-const CORPSE_PROMPTS = [
+let CORPSE_PROMPTS = [
   `
 CORPSE VARIANT A.
 
@@ -5543,7 +5726,13 @@ function printConfig(mode) {
 */
 
 async function main() {
-  const mode = (process.argv[2] ?? "all").toLowerCase();
+  const mode = parseModeArg();
+
+  const templatePath = parseTemplateArg();
+
+  const template = await loadTemplate(templatePath);
+
+  applyTemplateConfig(template);
 
   const validModes = [
     "masters",
