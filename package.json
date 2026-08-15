@@ -2,17 +2,21 @@
   "name": "sprite-sdxl",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "src/cli.ts",
   "scripts": {
-    "pipeline": "bun run pipeline.ts",
-    "test": "node --test sprite-pipeline-isometric.test.mjs"
+    "pipeline": "bun run src/cli.ts",
+    "cli": "bun run src/cli.ts",
+    "test": "bun test src/test/"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "dependencies": {
     "@imgly/background-removal-node": "^1.4.5",
     "sharp": "^0.35.3"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
   }
 }
