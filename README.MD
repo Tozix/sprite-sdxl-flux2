@@ -2608,28 +2608,41 @@ scale
 Use the Bun + TypeScript pipeline front-end:
 
 ```bash
-bun run pipeline.ts <sprite|isometric> <template> <mode> [--force]
+bun run src/cli.ts <sprite|isometric> <template> <mode> [--force]
 ```
 
-- `template` is a prompt file under `templates/<pipeline>/*` or a path to an override JSON.
-- The CLI forwards the resolved template path as `--template <path>` to the legacy runner.
+- `template` is a prompt file under `templates/<pipeline>/*` (e.g. `base`) or a path to an override JSON.
+- The CLI loads the resolved template, applies prompt overrides, and dispatches to the matching pipeline.
 - `--force` bypasses generated-frame caches.
 
 Examples:
 
 ```bash
-bun run pipeline.ts sprite base masters
-bun run pipeline.ts sprite base animate
-bun run pipeline.ts sprite base all --force
+bun run src/cli.ts sprite base masters
+bun run src/cli.ts sprite base animate
+bun run src/cli.ts sprite base all --force
 
-bun run pipeline.ts isometric base walk
-bun run pipeline.ts isometric base combat --force
+bun run src/cli.ts isometric base walk
+bun run src/cli.ts isometric base combat --force
 ```
 
-Legacy modes remain provided by the existing script implementation for now.
+Both pipelines live under `src/pipelines/<pipeline>/*` as TypeScript modules:
 
-- Sprite supports `masters`, `animate`, `pixelize`, `sheet`, `all`.
-- Isometric supports `masters`, `walk`, `attack`, `hit`, `death`, `corpses`, `combat`, `all`, `pixelize`, `sheet`.
+- `sprite` runs the OpenAI-compatible `/v1/images/*` API.
+- `isometric` runs the native `sdcpp/v1/img_gen` async job API with the FLUX.2 Klein model.
+
+Supported modes:
+
+- Sprite: `masters`, `animate`, `pixelize`, `sheet`, `all`.
+- Isometric: `masters`, `walk`, `attack`, `hit`, `death`, `corpses`, `combat`, `all`, `pixelize`, `sheet`.
+
+Unit tests:
+
+```bash
+bun test src/test/
+```
+
+Runs the `bun:test` suites in `src/test/sprite.test.ts` and `src/test/isometric.test.ts`.
 
 ---
 

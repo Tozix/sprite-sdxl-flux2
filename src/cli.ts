@@ -131,9 +131,12 @@ async function runPipeline(options: Options): Promise<void> {
     return;
   }
 
-  throw new Error(
-    `Pipeline "${options.pipeline}" is not implemented yet in src/cli.ts (Phase 2 pending).`,
-  );
+  const { runIsometric } = await import("./pipelines/isometric/run.ts");
+  await runIsometric({
+    mode: options.mode,
+    template,
+    force: options.force,
+  });
 }
 
 async function main(): Promise<void> {

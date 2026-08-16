@@ -5,18 +5,19 @@
 - Root lock file: `package-lock.json`
 
 ## Key Conventions
-- Node project with CommonJS (`package.json` has `"type": "commonjs"`).
+- Node project with ESM (`package.json` has `"type": "module"`).
+- Source is TypeScript under `src/`, executed directly by Bun via `bun run src/cli.ts`.
 - No project-wide lint/format/typecheck scripts are defined in `package.json`.
-- `npm test` is a placeholder (`Error: no test specified`).
+- `npm test` still acts as a placeholder — prefer `bun test src/test/` for the real pipeline scenarios.
 - Prefer `README.MD` for full pipeline behavior, generation rules, and output layout.
 - Avoid editing `node_modules` manually.
 
 ## File-Scoped Commands
 | Task | Command |
 |------|---------|
-| Standard pipeline mode | `node sprite-pipeline.mjs <masters|animate|pixelize|sheet|all> [--force]` |
-| Isometric pipeline mode | `node sprite-pipeline-isometric.mjs <masters|animate|clean|pixelize|sheet|all> [--force]` |
-| Tests (file-scoped) | `node --test sprite-pipeline-isometric.test.mjs` |
+| Run any pipeline mode | `bun run src/cli.ts <sprite|isometric> <template> <mode> [--force]` |
+| Both pipelines share the same CLI; choose the pipeline by the first argument. |
+| Run unit tests | `bun test src/test/` |
 
 ## Commit Attribution
 - Author all commits as the user only.
