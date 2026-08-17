@@ -33,11 +33,12 @@
 # 1. Что лежит в этом комплекте
 
 ```text
-iron-arcana-flux2-windows/
-├── README_FLUX2_WINDOWS.md
+scripts/
 ├── install-flux2.bat
 └── install-flux2.ps1
 ```
+
+> Установщик лежит в `scripts/` в корне репозитория. Этот README (`flux2-install-windows/README_FLUX2_WINDOWS.md`) описывает установку и запуск AI-сервера.
 
 Главный файл — `install-flux2.ps1`.
 
@@ -177,7 +178,7 @@ C:\IronArcana\tools\flux2-windows\
 Перейди в папку:
 
 ```powershell
-cd C:\IronArcana\tools\flux2-windows
+cd C:\IronArcana\scripts
 ```
 
 Запусти:
@@ -421,7 +422,7 @@ Get-NetIPAddress -AddressFamily IPv4 |
 Для нашей исходной машины это было примерно:
 
 ```text
-192.168.0.14
+192.168.0.16
 ```
 
 На другой машине адрес будет другой.
@@ -433,13 +434,13 @@ Get-NetIPAddress -AddressFamily IPv4 |
 Допустим Windows имеет IP:
 
 ```text
-192.168.0.14
+192.168.0.16
 ```
 
 На Mac:
 
 ```bash
-curl http://192.168.0.14:7861/v1/models
+curl http://192.168.0.16:7861/v1/models
 ```
 
 Если получен JSON — Mac видит GPU server.
@@ -450,7 +451,7 @@ curl http://192.168.0.14:7861/v1/models
 
 ```bash
 curl -sS \
-  -X POST "http://192.168.0.14:7861/v1/images/generations" \
+  -X POST "http://192.168.0.16:7861/v1/images/generations" \
   -H "Content-Type: application/json" \
   -d '{
     "prompt": "a small brown fantasy rat, full body, neutral background",
@@ -498,7 +499,7 @@ POST /v1/images/edits
 
 ```bash
 curl -sS \
-  -X POST "http://192.168.0.14:7861/v1/images/edits" \
+  -X POST "http://192.168.0.16:7861/v1/images/edits" \
   -F 'image[]=@./rat-left.png' \
   -F 'prompt=Keep exactly the same rat from the reference image. Preserve identity, proportions, fur color, ears, legs and tail. Rotate the rat into a rear view. The rat faces directly away from the viewer, north/up in a top-down 2D RPG. Full body visible. Plain neutral background.' \
   -F 'size=512x512' \
@@ -766,6 +767,8 @@ Remove-Item "C:\AI\models\flux2\klein4b\diffusion\flux-2-klein-4b-Q4_0.gguf"
 .\install-flux2.bat
 ```
 
+> Запускай `install-flux2.bat` из папки `scripts/`, где он лежит в репозитории.
+
 ---
 
 # 20. Типичные проблемы
@@ -897,8 +900,7 @@ RemoteAddress = LocalSubnet
 В Git класть:
 
 ```text
-tools/flux2-windows/
-├── README_FLUX2_WINDOWS.md
+scripts/
 ├── install-flux2.bat
 └── install-flux2.ps1
 ```

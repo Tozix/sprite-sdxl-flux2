@@ -2,6 +2,8 @@
 
 > Technical specification for AI agents generating visual assets for the **Iron Arcana MMORPG**.
 
+> See also: [docs/](docs/) — technical documentation, including the [Mob Generation System](docs/mob-generation.md).
+
 ---
 
 # 1. Purpose
@@ -131,6 +133,19 @@ The Windows machine should be treated as a **local GPU service**, not as the pri
 
 Do not require manual copying of generated files from Windows to Mac.
 
+## 2.3 Deployment scripts
+
+Ready-made installers for the AI inference server (`stable-diffusion.cpp` + FLUX.2 Klein 4B models) live in `scripts/`:
+
+```text
+scripts/
+├── install-flux2-ubuntu.sh   # Ubuntu 24.04+ x86_64 (Vulkan)
+├── install-flux2.ps1         # Windows (Vulkan)
+└── install-flux2.bat         # Windows wrapper around install-flux2.ps1
+```
+
+See `scripts/README.md` for usage, and `flux2-install-windows/README_FLUX2_WINDOWS.md` for the full Windows walkthrough.
+
 ---
 
 # 3. Local network
@@ -138,7 +153,7 @@ Do not require manual copying of generated files from Windows to Mac.
 Current AI server address:
 
 ```text
-http://192.168.0.14:7861
+http://192.168.0.16:7861
 ```
 
 The server is available only inside the local network unless the network configuration changes.
@@ -146,13 +161,13 @@ The server is available only inside the local network unless the network configu
 Typical health check:
 
 ```bash
-curl http://192.168.0.14:7861/v1/models
+curl http://192.168.0.16:7861/v1/models
 ```
 
 Native capability discovery:
 
 ```bash
-curl http://192.168.0.14:7861/sdcpp/v1/capabilities
+curl http://192.168.0.16:7861/sdcpp/v1/capabilities
 ```
 
 ## IMPORTANT
@@ -2603,58 +2618,46 @@ scale
 
 ---
 
-# 75. Current CLI modes in sprite-pipeline
+# 75. Current CLI entrypoint
 
-Current mob pipeline supports:
-
-```bash
-node sprite-pipeline.mjs masters
-```
-
-Creates/validates canonical masters.
+Use the Bun + TypeScript pipeline front-end:
 
 ```bash
-node sprite-pipeline.mjs animate
+bun run src/cli.ts <sprite|isometric> <template> <mode> [--force]
 ```
 
-Generates animation RAW frames, pixelizes and creates sheets.
+- `template` is a prompt file under `templates/<pipeline>/*` (e.g. `base`) or a path to an override JSON.
+- The CLI loads the resolved template, applies prompt overrides, and dispatches to the matching pipeline.
+- `--force` bypasses generated-frame caches.
+
+Examples:
 
 ```bash
-node sprite-pipeline.mjs pixelize
+bun run src/cli.ts sprite base masters
+bun run src/cli.ts sprite base animate
+bun run src/cli.ts sprite base all --force
+
+bun run src/cli.ts isometric base walk
+bun run src/cli.ts isometric base combat --force
 ```
 
-Does not use AI.
+Both pipelines live under `src/pipelines/<pipeline>/*` as TypeScript modules:
 
-Re-processes existing RAW frames.
+- `sprite` runs the OpenAI-compatible `/v1/images/*` API.
+- `isometric` runs the native `sdcpp/v1/img_gen` async job API with the FLUX.2 Klein model.
 
-Use this to tune:
+Supported modes:
 
-```text
-spriteSize
-paletteSize
-background removal
-pixel processing
-```
+- Sprite: `masters`, `animate`, `pixelize`, `sheet`, `all`.
+- Isometric: `masters`, `walk`, `attack`, `hit`, `death`, `corpses`, `combat`, `all`, `pixelize`, `sheet`.
 
-without GPU generation.
+Unit tests:
 
 ```bash
-node sprite-pipeline.mjs sheet
+bun test src/test/
 ```
 
-Only rebuilds sheets/manifests.
-
-```bash
-node sprite-pipeline.mjs all
-```
-
-Runs the complete pipeline.
-
-Force regeneration:
-
-```bash
-node sprite-pipeline.mjs all --force
-```
+Runs the `bun:test` suites in `src/test/sprite.test.ts` and `src/test/isometric.test.ts`.
 
 ---
 
