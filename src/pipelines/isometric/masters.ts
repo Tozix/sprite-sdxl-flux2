@@ -9,7 +9,7 @@ import {
   exists,
   ensureDir,
 } from "./fs.ts";
-import { isoPaths, masterForDirection } from "./paths.ts";
+import { isoPaths, masterForDirection, mobOutputDir } from "./paths.ts";
 import {
   runNativeImageJob,
   normalizeChroma,
@@ -27,9 +27,6 @@ import {
   differenceString,
   backMasterTooSimilar,
 } from "./difference.ts";
-
-const P = isoPaths();
-const AI_CTX = { outputDir: ISO_CONFIG.outputDir };
 
 function backMasterRetryPrompt(attempt: number, useReference: boolean): string {
   if (attempt === 0) return MASTER_BACK_LEFT_PROMPT;
@@ -115,7 +112,9 @@ TAIL:
 }
 
 export async function generateFrontMaster(force: boolean): Promise<void> {
-  const cache = sourceAIPath(P.masterFrontLeft, ISO_CONFIG.outputDir);
+  const P = isoPaths();
+  const AI_CTX = { outputDir: mobOutputDir() };
+  const cache = sourceAIPath(P.masterFrontLeft, mobOutputDir());
   if (!force && (await exists(cache))) {
     await normalizeChroma(cache, P.masterFrontLeft, {}, AI_CTX);
     const earQA = await validateMasterEarQA(P.masterFrontLeft);
@@ -193,7 +192,9 @@ Normal rat anatomy.
 }
 
 export async function generateBackMaster(force: boolean): Promise<void> {
-  const cache = sourceAIPath(P.masterBackLeft, ISO_CONFIG.outputDir);
+  const P = isoPaths();
+  const AI_CTX = { outputDir: mobOutputDir() };
+  const cache = sourceAIPath(P.masterBackLeft, mobOutputDir());
   if (!force && (await exists(cache))) {
     await normalizeChroma(
       cache,
@@ -269,6 +270,7 @@ export async function generateMasters(force: boolean): Promise<void> {
 }
 
 export async function ensureMasters(): Promise<void> {
+  const P = isoPaths();
   if (
     (await exists(P.masterFrontLeft)) &&
     (await exists(P.masterBackLeft))

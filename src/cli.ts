@@ -3,8 +3,6 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import {
-  parseTemplateArg,
-  parseModeArg,
   loadTemplate,
   type Template,
 } from "./templates.ts";
@@ -33,12 +31,16 @@ function usage(): void {
   bun run src/cli.ts sprite <template> <mode> [--force]
   mode: ${VALID_MODES.sprite.join("|")}
 
-  bun run src/cli.ts isometric <template> <mode> [--force]
+  bun run src/cli.ts isometric <template> <mode> [--force] [--mob <name>]
   mode: ${VALID_MODES.isometric.join("|")}
 
 Template values:
 - common: base (loaded from templates/<pipeline>/base.json)
 - or a custom path to any .json file
+
+--mob <name> (isometric only):
+- loads templates/isometric/mobs/<name>.json on top of the base template
+- mobs: rat, spider, slime
 `);
 }
 
@@ -74,19 +76,36 @@ type Options = {
   templatePath: string;
   mode: string;
   force: boolean;
+  mob: string | null;
 };
 
 function parseArgs(argv: string[]): Options {
-  const [pipelineArg, templateArg, modeArg, ...flags] = argv;
+  const [pipelineArg, templateArg, modeArg, ...rest] = argv;
 
   if (!pipelineArg || !templateArg || !modeArg) {
     usage();
-    throw new Error("Expected: <pipeline> <template> <mode> [--force]");
+    throw new Error("Expected: <pipeline> <template> <mode> [--force] [--mob <name>]");
   }
 
-  if (flags.length > 1 || (flags[0] !== undefined && flags[0] !== "--force")) {
-    usage();
-    throw new Error("Unknown flag: only --force is supported");
+  let force = false;
+  let mob: string | null = null;
+
+  for (let i = 0; i < rest.length; i++) {
+    const flag = rest[i]!;
+    if (flag === "--force") {
+      force = true;
+    } else if (flag === "--mob") {
+      const value = rest[i + 1];
+      if (!value || value.startsWith("--")) {
+        usage();
+        throw new Error("Missing value after --mob");
+      }
+      mob = value;
+      i += 1;
+    } else {
+      usage();
+      throw new Error("Unknown flag: only --force and --mob are supported");
+    }
   }
 
   if (!isPipeline(pipelineArg)) {
@@ -101,11 +120,17 @@ function parseArgs(argv: string[]): Options {
     );
   }
 
+  if (mob && pipelineArg !== "isometric") {
+    usage();
+    throw new Error("--mob is only supported for the isometric pipeline");
+  }
+
   return {
     pipeline: pipelineArg,
     templatePath: templateArg,
     mode: modeArg,
-    force: flags[0] === "--force",
+    force,
+    mob,
   };
 }
 
@@ -119,7 +144,24 @@ async function runPipeline(options: Options): Promise<void> {
     `Running ${options.pipeline} pipeline using template: ${path.relative(process.cwd(), resolvedPath)}`,
   );
 
-  const template: Template | null = await loadTemplate(resolvedPath);
+  let template: Template | null = await loadTemplate(resolvedPath);
+
+  if (options.pipeline === "isometric" && options.mob) {
+    const mobPath = path.join(
+      process.cwd(),
+      "templates",
+      "isometric",
+      "mobs",
+      `${options.mob}.json`,
+    );
+    const mobTemplate = await loadTemplate(mobPath);
+    if (mobTemplate) {
+      template = { ...template, ...mobTemplate };
+      console.log(
+        `Mob: ${options.mob} (merged templates/isometric/mobs/${options.mob}.json)`,
+      );
+    }
+  }
 
   if (options.pipeline === "sprite") {
     const { runSprite } = await import("./pipelines/sprite/run.ts");

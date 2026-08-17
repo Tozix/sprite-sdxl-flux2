@@ -81,11 +81,10 @@ function printConfig(mode: string, force: boolean): void {
   console.log("API: sdcpp native async jobs");
 }
 
-const P = isoPaths();
-
 function pixelizeCtx() {
+  const P = isoPaths();
   return {
-    outputDir: ISO_CONFIG.outputDir,
+    outputDir: P.outputDir,
     palettePath: P.palette,
     mirrorDirection: MIRROR_DIRECTION,
     canonicalDirections: CANONICAL_DIRECTIONS,
@@ -97,6 +96,7 @@ function pixelizeCtx() {
 }
 
 function sheetsCtx() {
+  const P = isoPaths();
   return {
     sheetsDir: P.sheets,
     directions: DIRECTIONS,

@@ -12,6 +12,9 @@ import {
   CANONICAL_DIRECTIONS,
   DIRECTIONS,
   MIRROR_DIRECTION,
+  MOB_NAME,
+  MOB_STYLE,
+  MOB_ANATOMY,
 } from "../pipelines/isometric/prompts.ts";
 import {
   buildGlobalPalette,
@@ -117,6 +120,24 @@ test("applyTemplateConfig overrides MIRROR_DIRECTION", () => {
     MIRROR_DIRECTION: { southwest: "northwest" },
   });
   expect(MIRROR_DIRECTION.southwest).toBe("northwest");
+});
+
+test("applyTemplateConfig overrides MOB_NAME and MOB_STYLE", () => {
+  applyTemplateConfig({
+    MOB_NAME: "spider",
+    MOB_STYLE: "A hostile cave spider enemy.",
+    MOB_ANATOMY: "The spider has exactly eight legs.",
+  });
+  expect(MOB_NAME).toBe("spider");
+  expect(MOB_STYLE).toContain("spider");
+  expect(MOB_ANATOMY).toContain("eight legs");
+});
+
+test("animationPrompt uses MOB_NAME in body motion phrase", () => {
+  applyTemplateConfig({ MOB_NAME: "spider" });
+  const prompt = animationPrompt("pose", "southwest");
+  expect(prompt).toContain("SPIDER'S BODY must move");
+  expect(prompt).toContain("Spider faces SCREEN LOWER-LEFT");
 });
 
 test("phaseSeed advances per frame", () => {

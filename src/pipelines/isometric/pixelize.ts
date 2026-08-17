@@ -235,6 +235,142 @@ export function applyPalette(
   return output;
 }
 
+export function repairConnections(input: Buffer, size: number): Buffer {
+  const output = Buffer.from(input);
+  const mask = new Uint8Array(size * size);
+  for (let i = 0; i < size * size; i++) {
+    if (output[i * 4 + 3] > 128) mask[i] = 1;
+  }
+
+  const idx = (x: number, y: number) => y * size + x;
+  const inb = (x: number, y: number) => x >= 0 && y >= 0 && x < size && y < size;
+  const setPixel = (x: number, y: number) => {
+    if (!inb(x, y) || mask[idx(x, y)]) return;
+    const o = idx(x, y) * 4;
+    output[o] = output[o + 1] = output[o + 2] = 0;
+    output[o + 3] = 255;
+    mask[idx(x, y)] = 1;
+  };
+  const thickenBridges = () => {
+    const bridges: Array<[number, number]> = [];
+    for (let y = 1; y < size - 1; y++) {
+      for (let x = 1; x < size - 1; x++) {
+        const p = idx(x, y);
+        if (!mask[p]) continue;
+        const N = mask[idx(x, y - 1)];
+        const S = mask[idx(x, y + 1)];
+        const E = mask[idx(x + 1, y)];
+        const W = mask[idx(x - 1, y)];
+        const n = (N ? 1 : 0) + (S ? 1 : 0) + (E ? 1 : 0) + (W ? 1 : 0);
+        if (n === 2 && ((N && S && !E && !W) || (E && W && !N && !S))) {
+          bridges.push([x, y]);
+        }
+      }
+    }
+    for (const [bx, by] of bridges) {
+      for (const [ox, oy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ] as const) {
+        setPixel(bx + ox, by + oy);
+      }
+    }
+  };
+
+  thickenBridges();
+
+  const comp = new Int32Array(size * size).fill(-1);
+  const sizes: number[] = [];
+  let next = 0;
+  const stack: number[] = [];
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const p = idx(x, y);
+      if (!mask[p] || comp[p] !== -1) continue;
+      const id = next++;
+      let s = 0;
+      stack.push(p);
+      comp[p] = id;
+      while (stack.length) {
+        const cur = stack.pop()!;
+        s++;
+        const cx = cur % size;
+        const cy = (cur / size) | 0;
+        for (const [nx, ny] of [
+          [cx + 1, cy],
+          [cx - 1, cy],
+          [cx, cy + 1],
+          [cx, cy - 1],
+        ] as const) {
+          if (!inb(nx, ny)) continue;
+          const ni = idx(nx, ny);
+          if (mask[ni] && comp[ni] === -1) {
+            comp[ni] = id;
+            stack.push(ni);
+          }
+        }
+      }
+      sizes.push(s);
+    }
+  }
+  if (next <= 1) return output;
+
+  let largest = 0;
+  let largestSize = -1;
+  for (let id = 0; id < next; id++) {
+    if (sizes[id]! > largestSize) {
+      largestSize = sizes[id]!;
+      largest = id;
+    }
+  }
+
+  for (let id = 0; id < next; id++) {
+    if (id === largest) continue;
+    let bestDist = Infinity;
+    let bestFrom = -1;
+    let bestTo = -1;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        if (comp[idx(x, y)] !== id) continue;
+        for (let dy = -3; dy <= 3; dy++) {
+          for (let dx = -3; dx <= 3; dx++) {
+            const nx = x + dx;
+            const ny = y + dy;
+            if (!inb(nx, ny) || comp[idx(nx, ny)] !== largest) continue;
+            const d = dx * dx + dy * dy;
+            if (d < bestDist) {
+              bestDist = d;
+              bestFrom = idx(x, y);
+              bestTo = idx(nx, ny);
+            }
+          }
+        }
+      }
+    }
+    if (bestFrom !== -1) {
+      const fx = bestFrom % size;
+      const fy = (bestFrom / size) | 0;
+      const tx = bestTo % size;
+      const ty = (bestTo / size) | 0;
+      let x = fx;
+      let y = fy;
+      while (x !== tx) {
+        setPixel(x, y);
+        x += x < tx ? 1 : -1;
+      }
+      while (y !== ty) {
+        setPixel(x, y);
+        y += y < ty ? 1 : -1;
+      }
+      setPixel(tx, ty);
+    }
+  }
+  thickenBridges();
+  return output;
+}
+
 export async function createPreview(input: string): Promise<void> {
   const parsed = path.parse(input);
   await sharp(input)
@@ -459,10 +595,11 @@ export async function pixelizeSelection(
 
   for (const source of sources) {
     const key = `${source.animation}:${source.variant ?? -1}:${source.direction}:${source.frame}`;
-    await writeSprite(
+    const repaired = repairConnections(
       applyPalette(rasters.get(key)!, palette),
-      source.output,
+      ISO_CONFIG.sprite.size,
     );
+    await writeSprite(repaired, source.output);
     const mirrorOutput = ctx.spritePath(
       source.animation,
       ctx.mirrorDirection[source.direction]!,

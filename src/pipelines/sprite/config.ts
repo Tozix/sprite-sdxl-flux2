@@ -1,5 +1,5 @@
 export const SPRITE_CONFIG = {
-  server: "http://192.168.0.14:7861",
+  server: "http://192.168.0.16:7861",
   outputDir: "./output/rat",
   generationSize: "512x512",
   steps: 4,

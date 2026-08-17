@@ -1,27 +1,32 @@
 import path from "node:path";
 import { ISO_CONFIG } from "./config.ts";
-import { DIRECTIONS } from "./prompts.ts";
+import { DIRECTIONS, MOB_NAME } from "./prompts.ts";
 import { ensureDir } from "./fs.ts";
 
+export function mobOutputDir(): string {
+  return path.join(ISO_CONFIG.outputDir, MOB_NAME);
+}
+
 export function isoPaths() {
+  const outputDir = mobOutputDir();
   return {
-    outputDir: ISO_CONFIG.outputDir,
-    sourceAI: path.join(ISO_CONFIG.outputDir, "source-ai"),
-    masters: path.join(ISO_CONFIG.outputDir, "masters"),
-    raw: path.join(ISO_CONFIG.outputDir, "raw"),
-    sprites: path.join(ISO_CONFIG.outputDir, "sprites"),
-    sheets: path.join(ISO_CONFIG.outputDir, "sheets"),
+    outputDir,
+    sourceAI: path.join(outputDir, "source-ai"),
+    masters: path.join(outputDir, "masters"),
+    raw: path.join(outputDir, "raw"),
+    sprites: path.join(outputDir, "sprites"),
+    sheets: path.join(outputDir, "sheets"),
     masterFrontLeft: path.join(
-      ISO_CONFIG.outputDir,
+      outputDir,
       "masters",
       "master-front-left.png",
     ),
     masterBackLeft: path.join(
-      ISO_CONFIG.outputDir,
+      outputDir,
       "masters",
       "master-back-left.png",
     ),
-    palette: path.join(ISO_CONFIG.outputDir, "palette.json"),
+    palette: path.join(outputDir, "palette.json"),
   };
 }
 

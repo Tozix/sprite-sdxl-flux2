@@ -12,7 +12,7 @@ import {
 import {
   exists,
 } from "./fs.ts";
-import { isoPaths, rawPath, masterForDirection } from "./paths.ts";
+import { isoPaths, rawPath, masterForDirection, mobOutputDir } from "./paths.ts";
 import {
   runNativeImageJob,
   normalizeChroma,
@@ -34,14 +34,12 @@ import {
 import { phaseSeed } from "./config.ts";
 import { animationPrompt } from "./animation.ts";
 
-const P = isoPaths();
-const AI_CTX = { outputDir: ISO_CONFIG.outputDir };
-
 export async function generateStill({
   prompt,
   seed,
   output,
   reference = null,
+  strength = ISO_CONFIG.generation.masterStrength,
   appearanceReference = null,
   preserveBlood = false,
   force = false,
@@ -50,11 +48,13 @@ export async function generateStill({
   seed: number;
   output: string;
   reference?: string | null;
+  strength?: number;
   appearanceReference?: string | null;
   preserveBlood?: boolean;
   force?: boolean;
 }): Promise<void> {
-  const cache = sourceAIPath(output, ISO_CONFIG.outputDir);
+  const AI_CTX = { outputDir: mobOutputDir() };
+  const cache = sourceAIPath(output, mobOutputDir());
   if (!force && (await exists(cache))) {
     const cleanInfo = await normalizeChroma(
       cache,
@@ -64,7 +64,7 @@ export async function generateStill({
     );
     log(
       "CACHE",
-      `${relativeLabel(output, ISO_CONFIG.outputDir)} matte=${cleanInfo.mattePixels}${
+      `${relativeLabel(output, mobOutputDir())} matte=${cleanInfo.mattePixels}${
         cleanInfo.color
           ? ` color=${cleanInfo.color.before.toFixed(1)}->${cleanInfo.color.target.toFixed(1)}`
           : ""
@@ -73,7 +73,7 @@ export async function generateStill({
     return;
   }
 
-  const buffer = await runNativeImageJob({ prompt, seed, reference, output });
+  const buffer = await runNativeImageJob({ prompt, seed, reference, strength, output });
   const cleanInfo = await saveGeneratedBuffer(
     buffer,
     output,
@@ -82,7 +82,7 @@ export async function generateStill({
   );
   log(
     "FRAME",
-    `${relativeLabel(output, ISO_CONFIG.outputDir)} matte=${cleanInfo.mattePixels}${
+    `${relativeLabel(output, mobOutputDir())} matte=${cleanInfo.mattePixels}${
       cleanInfo.color
         ? ` color=${cleanInfo.color.before.toFixed(1)}->${cleanInfo.color.target.toFixed(1)}`
         : ""
@@ -97,6 +97,7 @@ export async function generateMotionFrame({
   direction,
   seed,
   output,
+  strength = ISO_CONFIG.generation.motionStrength,
   preserveBlood = false,
   keepHead = true,
   retryWeakPose = true,
@@ -108,12 +109,16 @@ export async function generateMotionFrame({
   direction: string;
   seed: number;
   output: string;
+  strength?: number;
   preserveBlood?: boolean;
   keepHead?: boolean;
   retryWeakPose?: boolean;
   force?: boolean;
 }): Promise<void> {
-  const cache = sourceAIPath(output, ISO_CONFIG.outputDir);
+  const textOnly = ISO_CONFIG.generation.textOnlyMotion;
+  if (textOnly) reference = null;
+  const AI_CTX = { outputDir: mobOutputDir() };
+  const cache = sourceAIPath(output, mobOutputDir());
   const appearanceReference = masterForDirection(direction);
 
   if (!force && (await exists(cache))) {
@@ -126,7 +131,7 @@ export async function generateMotionFrame({
     const validation = await validateFrameDifferences(output, validations);
     log(
       "CACHE",
-      `${relativeLabel(output, ISO_CONFIG.outputDir)} ${validationResultsString(validation.results)}${
+      `${relativeLabel(output, mobOutputDir())} ${validationResultsString(validation.results)}${
         cleanInfo.color
           ? ` color=${cleanInfo.color.before.toFixed(1)}->${cleanInfo.color.target.toFixed(1)}`
           : ""
@@ -169,6 +174,7 @@ Move the requested COMPLETE limbs much farther.
       prompt,
       seed: seed + attempt * ISO_CONFIG.generation.retrySeedOffset,
       reference,
+      strength,
       output,
     });
     const cleanInfo = await saveGeneratedBuffer(
@@ -180,7 +186,7 @@ Move the requested COMPLETE limbs much farther.
     const validation = await validateFrameDifferences(output, validations);
     log(
       "MOTION",
-      `${relativeLabel(output, ISO_CONFIG.outputDir)} ${validationResultsString(validation.results)} ${validation.pass ? "PASS" : "RETRY"}${
+      `${relativeLabel(output, mobOutputDir())} ${validationResultsString(validation.results)} ${validation.pass ? "PASS" : "RETRY"}${
         cleanInfo.color
           ? ` color=${cleanInfo.color.before.toFixed(1)}->${cleanInfo.color.target.toFixed(1)}`
           : ""
@@ -193,7 +199,7 @@ Move the requested COMPLETE limbs much farther.
       ISO_CONFIG.motion.retryWeakPose &&
       attempt + 1 < ISO_CONFIG.motion.maxAttempts
     ) {
-      warn("MOTION", `${relativeLabel(output, ISO_CONFIG.outputDir)} stronger retry`);
+      warn("MOTION", `${relativeLabel(output, mobOutputDir())} stronger retry`);
       continue;
     }
     return;
@@ -277,6 +283,7 @@ export async function generateWalkDirection(
 }
 
 export async function generateWalk(force: boolean): Promise<void> {
+  const P = isoPaths();
   await generateWalkDirection(
     "southwest",
     P.masterFrontLeft,
@@ -314,15 +321,14 @@ export async function generateSequentialAnimation({
   keepHead?: boolean;
   force?: boolean;
 }): Promise<void> {
-  let previous = master;
   for (let frame = 0; frame < poses.length; frame++) {
     const output = rawPath(animation, direction, frame);
     await generateMotionFrame({
-      reference: previous,
+      reference: master,
       validations: [
         {
-          path: previous,
-          label: "vs-prev",
+          path: master,
+          label: "vs-master",
           thresholds: strongFrames.includes(frame)
             ? contactMotionThresholds()
             : normalMotionThresholds(),
@@ -337,11 +343,11 @@ export async function generateSequentialAnimation({
       retryWeakPose: frame < poses.length - 1,
       force,
     });
-    previous = output;
   }
 }
 
 export async function generateAttack(force: boolean): Promise<void> {
+  const P = isoPaths();
   await generateSequentialAnimation({
     animation: "attack",
     direction: "southwest",
@@ -377,18 +383,18 @@ Return toward stance but retain visible stagger.
 export async function generateHitReactions(force: boolean): Promise<void> {
   for (let variant = 0; variant < ISO_CONFIG.animations.hitVariants; variant++) {
     for (const direction of ["southwest", "northwest"] as const) {
-      let previous = masterForDirection(direction);
+      const master = masterForDirection(direction);
       const baseSeed =
         (direction === "southwest" ? SEEDS.hitSouthwest! : SEEDS.hitNorthwest!) +
         variant * 1009;
       for (let frame = 0; frame < ISO_CONFIG.animations.hitFrames; frame++) {
         const output = rawPath("hit", direction, frame, variant);
         await generateMotionFrame({
-          reference: previous,
+          reference: master,
           validations: [
             {
-              path: previous,
-              label: "vs-prev",
+              path: master,
+              label: "vs-master",
               thresholds:
                 frame < 2
                   ? contactMotionThresholds()
@@ -402,7 +408,6 @@ export async function generateHitReactions(force: boolean): Promise<void> {
           retryWeakPose: frame < 2,
           force,
         });
-        previous = output;
       }
     }
   }
@@ -425,17 +430,17 @@ All limbs stay attached.
 
 export async function generateDeath(force: boolean): Promise<void> {
   for (const direction of ["southwest", "northwest"] as const) {
-    let previous = masterForDirection(direction);
+    const master = masterForDirection(direction);
     const baseSeed =
       direction === "southwest" ? SEEDS.deathSouthwest! : SEEDS.deathNorthwest!;
     for (let frame = 0; frame < ISO_CONFIG.animations.deathFrames; frame++) {
       const output = rawPath("death", direction, frame);
       await generateMotionFrame({
-        reference: previous,
+        reference: master,
         validations: [
           {
-            path: previous,
-            label: "vs-prev",
+            path: master,
+            label: "vs-master",
             thresholds:
               frame > 0 && frame < Math.min(4, ISO_CONFIG.animations.deathFrames)
                 ? contactMotionThresholds()
@@ -451,7 +456,6 @@ export async function generateDeath(force: boolean): Promise<void> {
         retryWeakPose: frame < ISO_CONFIG.animations.deathFrames - 1,
         force,
       });
-      previous = output;
     }
   }
 }

@@ -100,12 +100,14 @@ export function makeNativeRequestBody({
   prompt,
   seed,
   refImages = [],
+  strength,
 }: {
   prompt: string;
   seed: number;
   refImages?: string[];
+  strength?: number;
 }) {
-  return {
+  const body: Record<string, unknown> = {
     prompt,
     negative_prompt: "",
     width: ISO_CONFIG.generation.size,
@@ -125,21 +127,27 @@ export function makeNativeRequestBody({
     output_format: "png",
     output_compression: 100,
   };
+  if (typeof strength === "number") {
+    body.denoising_strength = strength;
+  }
+  return body;
 }
 
 export async function runNativeImageJob({
   prompt,
   seed,
   reference = null,
+  strength,
   output,
 }: {
   prompt: string;
   seed: number;
   reference?: string | null;
+  strength?: number;
   output: string;
 }): Promise<Buffer> {
   const refImages = reference ? [await fileToDataUrl(reference)] : [];
-  const body = makeNativeRequestBody({ prompt, seed, refImages });
+  const body = makeNativeRequestBody({ prompt, seed, refImages, strength });
 
   const jobNumber = metrics.aiJobs + metrics.aiFailures + 1;
   const started = performance.now();

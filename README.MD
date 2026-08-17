@@ -2,6 +2,8 @@
 
 > Technical specification for AI agents generating visual assets for the **Iron Arcana MMORPG**.
 
+> See also: [docs/](docs/) — technical documentation, including the [Mob Generation System](docs/mob-generation.md).
+
 ---
 
 # 1. Purpose
@@ -131,6 +133,19 @@ The Windows machine should be treated as a **local GPU service**, not as the pri
 
 Do not require manual copying of generated files from Windows to Mac.
 
+## 2.3 Deployment scripts
+
+Ready-made installers for the AI inference server (`stable-diffusion.cpp` + FLUX.2 Klein 4B models) live in `scripts/`:
+
+```text
+scripts/
+├── install-flux2-ubuntu.sh   # Ubuntu 24.04+ x86_64 (Vulkan)
+├── install-flux2.ps1         # Windows (Vulkan)
+└── install-flux2.bat         # Windows wrapper around install-flux2.ps1
+```
+
+See `scripts/README.md` for usage, and `flux2-install-windows/README_FLUX2_WINDOWS.md` for the full Windows walkthrough.
+
 ---
 
 # 3. Local network
@@ -138,7 +153,7 @@ Do not require manual copying of generated files from Windows to Mac.
 Current AI server address:
 
 ```text
-http://192.168.0.14:7861
+http://192.168.0.16:7861
 ```
 
 The server is available only inside the local network unless the network configuration changes.
@@ -146,13 +161,13 @@ The server is available only inside the local network unless the network configu
 Typical health check:
 
 ```bash
-curl http://192.168.0.14:7861/v1/models
+curl http://192.168.0.16:7861/v1/models
 ```
 
 Native capability discovery:
 
 ```bash
-curl http://192.168.0.14:7861/sdcpp/v1/capabilities
+curl http://192.168.0.16:7861/sdcpp/v1/capabilities
 ```
 
 ## IMPORTANT

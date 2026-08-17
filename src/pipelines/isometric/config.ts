@@ -1,9 +1,9 @@
 import { envString, envInt, envFloat, envBool } from "../../env.ts";
 
 export const ISO_CONFIG = {
-  server: envString("IRON_ARCANA_AI_SERVER", "http://192.168.0.14:7861"),
+  server: envString("IRON_ARCANA_AI_SERVER", "http://192.168.0.16:7861"),
 
-  outputDir: envString("IRON_ARCANA_OUTPUT_DIR", "./output/rat-isometric"),
+  outputDir: envString("IRON_ARCANA_OUTPUT_DIR", "./output/isometric"),
 
   generation: {
     size: envInt("IRON_ARCANA_GENERATION_SIZE", 384, 128, 2048),
@@ -16,13 +16,16 @@ export const ISO_CONFIG = {
       1,
       1_000_000,
     ),
+    masterStrength: envFloat("IRON_ARCANA_MASTER_STRENGTH", 0.4, 0, 1),
+    motionStrength: envFloat("IRON_ARCANA_MOTION_STRENGTH", 0.7, 0, 1),
+    textOnlyMotion: envBool("IRON_ARCANA_TEXT_ONLY_MOTION", false),
   },
 
   sprite: {
     size: envInt("IRON_ARCANA_SPRITE_SIZE", 96, 16, 512),
     paletteSize: envInt("IRON_ARCANA_PALETTE_SIZE", 28, 8, 256),
     previewScale: envInt("IRON_ARCANA_PREVIEW_SCALE", 3, 1, 12),
-    alphaThreshold: envInt("IRON_ARCANA_ALPHA_THRESHOLD", 90, 0, 255),
+    alphaThreshold: envInt("IRON_ARCANA_ALPHA_THRESHOLD", 40, 0, 255),
   },
 
   chroma: {
@@ -34,7 +37,7 @@ export const ISO_CONFIG = {
       180,
     ),
     minSaturation: envFloat("IRON_ARCANA_CHROMA_MIN_SATURATION", 0.28, 0, 1),
-    minValue: envFloat("IRON_ARCANA_CHROMA_MIN_VALUE", 0.035, 0, 1),
+    minValue: envFloat("IRON_ARCANA_CHROMA_MIN_VALUE", 0.12, 0, 1),
     directDistance: envFloat("IRON_ARCANA_CHROMA_DIRECT_DISTANCE", 150, 0, 500),
     spillPasses: envInt("IRON_ARCANA_CHROMA_SPILL_PASSES", 1, 0, 5),
     spillHueToleranceDegrees: envFloat(
@@ -49,7 +52,7 @@ export const ISO_CONFIG = {
       0,
       1,
     ),
-    spillMinValue: envFloat("IRON_ARCANA_CHROMA_SPILL_MIN_VALUE", 0.025, 0, 1),
+    spillMinValue: envFloat("IRON_ARCANA_CHROMA_SPILL_MIN_VALUE", 0.12, 0, 1),
   },
 
   appearance: {
@@ -105,7 +108,7 @@ export const ISO_CONFIG = {
     maxEarComponents: envInt("IRON_ARCANA_MASTER_MAX_EAR_COMPONENTS", 2, 1, 6),
     minEarComponentPixels: envInt(
       "IRON_ARCANA_MASTER_MIN_EAR_COMPONENT_PIXELS",
-      45,
+      500,
       5,
       10_000,
     ),

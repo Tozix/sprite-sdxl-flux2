@@ -116,7 +116,9 @@ Do not render:
 - motion lines
 `.trim();
 
-export let RAT_STYLE = `
+export let MOB_NAME = "rat";
+
+export let MOB_STYLE = `
 CHARACTER:
 
 A hostile sewer rat enemy from a grim dark medieval fantasy MMORPG.
@@ -191,97 +193,7 @@ Do not make the rat:
 - mutated
 `.trim();
 
-export let TAIL_INTEGRITY = `
-TAIL INTEGRITY — HARD REQUIREMENT:
-
-The rat has exactly ONE normal biological rat tail.
-
-The tail must be:
-
-- one continuous anatomical shape
-- physically attached to the pelvis
-- long
-- thin
-- smoothly tapered toward the tip
-- muted dirty flesh-pink
-- visually continuous from base to tip
-
-STRICTLY FORBIDDEN ON THE TAIL:
-
-- black rings
-- dark rings
-- gray rings
-- stripes
-- bands
-- alternating colors
-- segmented coloration
-- raccoon-like markings
-- reptile-like markings
-- armor-like segments
-- wrapped bands
-- black sections
-- decorative patterns
-
-The base may be slightly darker pink than the tip,
-but there must be NO repeated banding or rings.
-`.trim();
-
-export let EAR_INTEGRITY = `
-EAR ANATOMY — ABSOLUTE HARD REQUIREMENT:
-
-THE RAT HAS EXACTLY TWO EARS TOTAL.
-
-COUNT THEM BEFORE FINISHING THE IMAGE:
-
-EAR 1:
-- one near ear attached to one side of the skull
-
-EAR 2:
-- one far ear attached to the opposite side of the skull
-
-THERE IS NO EAR 3.
-
-STRICTLY FORBIDDEN:
-
-- third ear
-- extra ear
-- duplicated ear
-- duplicated near ear
-- duplicated far ear
-- double far ear
-- additional pink ear behind the skull
-- additional pink shape above the skull
-- extra triangular pink flap
-- extra triangular dark flap
-- ear-like horn
-- ear-like spike
-- detached ear
-- two ears growing from the same skull side
-- three triangular shapes on top of the head
-- hidden extra ear behind another ear
-
-IMPORTANT:
-
-Do NOT interpret fur tufts as an additional ear.
-
-Do NOT draw a third triangular silhouette
-between or behind the two ears.
-
-The complete head silhouette must contain
-EXACTLY TWO ear protrusions.
-
-FINAL EAR COUNT:
-
-2
-
-NOT 3.
-
-NOT 4.
-
-EXACTLY 2.
-`.trim();
-
-export let ANATOMY_INTEGRITY = `
+export let MOB_ANATOMY = `
 ANATOMY INTEGRITY — HARD REQUIREMENT:
 
 The rat has exactly four anatomical limbs.
@@ -332,15 +244,13 @@ Preserve:
 
 - species
 - skull proportions
-- muzzle proportions
+- facial proportions
 - eye color
-- ear design
-- exactly TWO ears
-- fur palette
+- head/ear design
+- body palette
 - body mass
-- paw material
-- tail thickness
-- pink tail material
+- limb material
+- distinctive body parts
 - line-art style
 
 IMPORTANT:
@@ -361,12 +271,12 @@ The reference image is the color authority.
 
 Do NOT:
 
-- darken the rat globally
-- shift fur hue
+- darken the creature globally
+- shift body palette hue
 - change exposure
 - change gamma
 - change global contrast
-- turn brown fur black
+- turn the base body color black
 
 The same body part must keep approximately
 the same material color and brightness
@@ -413,13 +323,9 @@ There is NO third triangular object.
 
 There is NO third ear.
 
-${RAT_STYLE}
+${MOB_STYLE}
 
-${EAR_INTEGRITY}
-
-${TAIL_INTEGRITY}
-
-${ANATOMY_INTEGRITY}
+${MOB_ANATOMY}
 
 ${ART_STYLE}
 
@@ -427,7 +333,7 @@ Full body visible.
 
 Centered composition.
 
-Keep generous empty matte around the rat.
+Keep generous empty matte around the creature.
 
 ${NO_SYMBOLS}
 
@@ -523,11 +429,7 @@ There must NOT be:
 - an extra pink flap between ears
 - an ear-like fur spike
 
-${EAR_INTEGRITY}
-
-${TAIL_INTEGRITY}
-
-${ANATOMY_INTEGRITY}
+${MOB_ANATOMY}
 
 ${ART_STYLE}
 
@@ -535,7 +437,7 @@ Full body visible.
 
 Centered composition.
 
-Keep generous empty matte around the rat.
+Keep generous empty matte around the creature.
 
 ${NO_SYMBOLS}
 
@@ -1088,17 +990,14 @@ export function applyTemplateConfig(template: Template | null): void {
   if (isString(candidate.NO_SYMBOLS)) {
     NO_SYMBOLS = candidate.NO_SYMBOLS;
   }
-  if (isString(candidate.RAT_STYLE)) {
-    RAT_STYLE = candidate.RAT_STYLE;
+  if (isString(candidate.MOB_NAME)) {
+    MOB_NAME = candidate.MOB_NAME;
   }
-  if (isString(candidate.TAIL_INTEGRITY)) {
-    TAIL_INTEGRITY = candidate.TAIL_INTEGRITY;
+  if (isString(candidate.MOB_STYLE)) {
+    MOB_STYLE = candidate.MOB_STYLE;
   }
-  if (isString(candidate.EAR_INTEGRITY)) {
-    EAR_INTEGRITY = candidate.EAR_INTEGRITY;
-  }
-  if (isString(candidate.ANATOMY_INTEGRITY)) {
-    ANATOMY_INTEGRITY = candidate.ANATOMY_INTEGRITY;
+  if (isString(candidate.MOB_ANATOMY)) {
+    MOB_ANATOMY = candidate.MOB_ANATOMY;
   }
   if (isString(candidate.ART_STYLE)) {
     ART_STYLE = candidate.ART_STYLE;
@@ -1139,5 +1038,14 @@ export function applyTemplateConfig(template: Template | null): void {
   }
   if (isArrayOfString(candidate.CORPSE_PROMPTS)) {
     CORPSE_PROMPTS = cloneArrayOfStrings(candidate.CORPSE_PROMPTS);
+  }
+
+  if (candidate.MOTION && typeof candidate.MOTION === "object") {
+    const motion = candidate.MOTION as Record<string, number>;
+    for (const [key, value] of Object.entries(motion)) {
+      if (key in ISO_CONFIG.motion && typeof value === "number") {
+        (ISO_CONFIG.motion as Record<string, unknown>)[key] = value;
+      }
+    }
   }
 }

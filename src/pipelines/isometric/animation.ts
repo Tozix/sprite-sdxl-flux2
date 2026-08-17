@@ -1,19 +1,20 @@
 import {
   IDENTITY_LOCK,
   COLOR_LOCK_PROMPT,
-  TAIL_INTEGRITY,
-  EAR_INTEGRITY,
+  MOB_NAME,
+  MOB_STYLE,
+  MOB_ANATOMY,
   ISOMETRIC_CAMERA,
-  ANATOMY_INTEGRITY,
   ART_STYLE,
   NO_SYMBOLS,
   CHROMA_BACKGROUND,
 } from "./prompts.ts";
 
 export function orientationPrompt(direction: string): string {
+  const mobCap = MOB_NAME.charAt(0).toUpperCase() + MOB_NAME.slice(1);
   return direction === "southwest"
     ? `
-Rat faces SCREEN LOWER-LEFT.
+${mobCap} faces SCREEN LOWER-LEFT.
 
 Maintain THREE-QUARTER FRONT-AND-SIDE isometric view.
 
@@ -22,11 +23,11 @@ Head remains lower-left.
 Rear body extends upper-right.
 `.trim()
     : `
-Rat faces SCREEN UPPER-LEFT.
+${mobCap} faces SCREEN UPPER-LEFT.
 
 Maintain THREE-QUARTER BACK-AND-SIDE isometric view.
 
-The rat faces AWAY from the viewer.
+The creature faces AWAY from the viewer.
 
 Head remains upper-left.
 
@@ -46,9 +47,9 @@ ${IDENTITY_LOCK}
 
 ${COLOR_LOCK_PROMPT}
 
-${TAIL_INTEGRITY}
+${MOB_STYLE}
 
-${EAR_INTEGRITY}
+${MOB_ANATOMY}
 
 ${ISOMETRIC_CAMERA}
 
@@ -63,7 +64,7 @@ Most visible motion must come from:
 
 - limbs
 - body weight
-- tail balance
+- balance
 `.trim()
     : `
 Head may move naturally,
@@ -75,7 +76,7 @@ POSE:
 
 ${pose}
 
-The RAT'S BODY must move.
+The ${MOB_NAME.toUpperCase()}'S BODY must move.
 
 The CAMERA must remain fixed.
 
@@ -85,10 +86,10 @@ Do not zoom in.
 
 Do not zoom out.
 
-Do not translate the entire rat across the canvas
+Do not translate the entire creature across the canvas
 merely to fake motion.
 
-${ANATOMY_INTEGRITY}
+${MOB_ANATOMY}
 
 ${
   bloodAllowed

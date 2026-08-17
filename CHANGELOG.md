@@ -29,7 +29,7 @@ All notable changes to this project are documented here.
 
 ### Added
 
-- Added Ubuntu helper installer: `install-flux2-ubuntu.sh`.
+- Added Ubuntu helper installer: `scripts/install-flux2-ubuntu.sh`.
 
 ### Changed
 
